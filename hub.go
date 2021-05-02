@@ -27,12 +27,12 @@ type Hub struct {
 
 	db *badger.DB
 
-	logger *logrus.Logger
+	logger logrus.FieldLogger
 }
 
 var json = jsoniter.ConfigDefault
 
-func NewHub(db *badger.DB, logger *logrus.Logger) *Hub {
+func NewHub(db *badger.DB, logger logrus.FieldLogger) *Hub {
 	if logger == nil {
 		logger = logrus.New()
 	}
