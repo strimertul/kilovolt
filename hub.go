@@ -123,7 +123,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 					client.send <- msg
 					h.logger.WithFields(logrus.Fields{
 						"client": client.conn.RemoteAddr(),
-						"key":    key,
+						"key":    string(key),
 					}).Debug("get for inexistant key")
 					return nil
 				}
@@ -137,7 +137,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			client.send <- msg
 			h.logger.WithFields(logrus.Fields{
 				"client": client.conn.RemoteAddr(),
-				"key":    key,
+				"key":    string(key),
 			}).Debug("get key")
 			return nil
 		})
@@ -166,7 +166,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
-			"key":    key,
+			"key":    string(key),
 		}).Debug("modified key")
 	case CmdSubscribeKey:
 		// Check params
@@ -182,7 +182,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 		h.subscribers[key][client] = true
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
-			"key":    key,
+			"key":    string(key),
 		}).Debug("subscribed to key")
 		// Send OK response
 		msg, _ := json.Marshal(wsEmptyResponse{"response", true, string(message.Data)})
@@ -206,7 +206,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 		delete(h.subscribers[key], client)
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
-			"key":    key,
+			"key":    string(key),
 		}).Debug("unsubscribed to key")
 		// Send OK response
 		msg, _ := json.Marshal(wsEmptyResponse{"response", true, string(message.Data)})
