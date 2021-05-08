@@ -70,11 +70,6 @@ func (h *Hub) update(kvs *pb.KVList) error {
 	return nil
 }
 
-func sendErr(client *Client, err string) {
-	msg, _ := json.Marshal(wsError{err})
-	client.send <- msg
-}
-
 func (h *Hub) ReadKey(key string) (string, error) {
 	tx := h.db.NewTransaction(false)
 	defer tx.Discard()
@@ -100,9 +95,10 @@ func (h *Hub) WriteKey(key string, data string) error {
 
 func (h *Hub) handleCmd(client *Client, message rawMessage) {
 	var msg wsRequest
+	messageID := string(message.Data)
 	err := json.Unmarshal(message.Data, &msg)
 	if err != nil {
-		sendErr(message.Client, fmt.Sprintf("invalid message format: %v", err.Error()))
+		message.Client.sendErr(ErrInvalidFmt, err.Error(), messageID)
 		return
 	}
 
@@ -111,7 +107,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 		// Check params
 		key, ok := msg.Data["key"].(string)
 		if !ok {
-			sendErr(client, "invalid 'key' param")
+			client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", messageID)
 			return
 		}
 
@@ -119,8 +115,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			val, err := tx.Get([]byte(key))
 			if err != nil {
 				if err == badger.ErrKeyNotFound {
-					msg, _ := json.Marshal(wsGenericResponse{"response", true, string(message.Data), string("")})
-					client.send <- msg
+					client.sendJSON(wsGenericResponse{"response", true, messageID, string("")})
 					h.logger.WithFields(logrus.Fields{
 						"client": client.conn.RemoteAddr(),
 						"key":    string(key),
@@ -133,8 +128,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			if err != nil {
 				return err
 			}
-			msg, _ := json.Marshal(wsGenericResponse{"response", true, string(message.Data), string(byt)})
-			client.send <- msg
+			client.sendJSON(wsGenericResponse{"response", true, messageID, string(byt)})
 			h.logger.WithFields(logrus.Fields{
 				"client": client.conn.RemoteAddr(),
 				"key":    string(key),
@@ -145,12 +139,12 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 		// Check params
 		key, ok := msg.Data["key"].(string)
 		if !ok {
-			sendErr(client, "invalid 'key' param")
+			client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", messageID)
 			return
 		}
 		data, ok := msg.Data["data"].(string)
 		if !ok {
-			sendErr(client, "invalid 'key' param")
+			client.sendErr(ErrMissingParam, "invalid or missing 'data' parameter", messageID)
 			return
 		}
 
@@ -158,11 +152,10 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			return tx.Set([]byte(key), []byte(data))
 		})
 		if err != nil {
-			sendErr(client, fmt.Sprintf("update failed: %v", err.Error()))
+			client.sendErr(ErrUpdateFailed, err.Error(), messageID)
 		}
 		// Send OK response
-		msg, _ := json.Marshal(wsEmptyResponse{"response", true, string(message.Data)})
-		client.send <- msg
+		client.sendJSON(wsEmptyResponse{"response", true, messageID})
 
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
@@ -172,7 +165,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 		// Check params
 		key, ok := msg.Data["key"].(string)
 		if !ok {
-			sendErr(client, "invalid 'key' param")
+			client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", messageID)
 			return
 		}
 		_, ok = h.subscribers[key]
@@ -185,22 +178,23 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			"key":    string(key),
 		}).Debug("subscribed to key")
 		// Send OK response
-		msg, _ := json.Marshal(wsEmptyResponse{"response", true, string(message.Data)})
-		client.send <- msg
+		client.sendJSON(wsEmptyResponse{"response", true, messageID})
 	case CmdUnsubscribeKey:
 		// Check params
 		key, ok := msg.Data["key"].(string)
 		if !ok {
-			sendErr(client, "invalid 'key' param")
+			client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", messageID)
 			return
 		}
 		_, ok = h.subscribers[key]
 		if !ok {
-			sendErr(client, "subscription does not exist")
+			// No subscription, just say we're done
+			client.sendJSON(wsEmptyResponse{"response", true, messageID})
 			return
 		}
 		if _, ok := h.subscribers[key][client]; !ok {
-			sendErr(client, "you are not subscribed to this")
+			// No subscription from specific client, just say we're done
+			client.sendJSON(wsEmptyResponse{"response", true, messageID})
 			return
 		}
 		delete(h.subscribers[key], client)
@@ -209,10 +203,11 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			"key":    string(key),
 		}).Debug("unsubscribed to key")
 		// Send OK response
-		msg, _ := json.Marshal(wsEmptyResponse{"response", true, string(message.Data)})
-		client.send <- msg
+		client.sendJSON(wsEmptyResponse{"response", true, messageID})
+	case CmdProtoVersion:
+		client.sendJSON(wsGenericResponse{"response", true, messageID, ProtoVersion})
 	default:
-		sendErr(client, "unknown command")
+		client.sendErr(ErrUnknownCmd, fmt.Sprintf("command \"%s\" is mistyped or not supported", msg.CmdName), messageID)
 	}
 }
 

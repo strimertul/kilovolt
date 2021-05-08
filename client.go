@@ -120,6 +120,15 @@ func (c *Client) writePump() {
 	}
 }
 
+func (c *Client) sendJSON(data interface{}) {
+	msg, _ := json.Marshal(data)
+	c.send <- msg
+}
+
+func (c *Client) sendErr(err ErrCode, details string, cmd string) {
+	c.sendJSON(wsError{false, err, details, cmd})
+}
+
 // serveWs handles websocket requests from the peer.
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)

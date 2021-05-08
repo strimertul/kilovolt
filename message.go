@@ -2,10 +2,22 @@ package kv
 
 // Commands
 const (
+	CmdProtoVersion   = "version"
 	CmdReadKey        = "kget"
 	CmdWriteKey       = "kset"
 	CmdSubscribeKey   = "ksub"
 	CmdUnsubscribeKey = "kunsub"
+)
+
+const ProtoVersion = "v2"
+
+type ErrCode string
+
+const (
+	ErrInvalidFmt   = "invalid message format"
+	ErrMissingParam = "required parameter missing"
+	ErrUpdateFailed = "server update failed"
+	ErrUnknownCmd   = "unknown command"
 )
 
 type wsRequest struct {
@@ -14,7 +26,10 @@ type wsRequest struct {
 }
 
 type wsError struct {
-	Error string `json:"error"`
+	Ok      bool    `json:"ok"`
+	Error   ErrCode `json:"error"`
+	Details string  `json:"details"`
+	Cmd     string  `json:"cmd"`
 }
 
 type wsGenericResponse struct {
