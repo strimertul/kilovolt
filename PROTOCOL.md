@@ -69,7 +69,7 @@ They follow this format:
 }
 ```
 
-Check [message.go](message.go) for a list of all error codes.
+Check below for a list of all error codes.
 
 ## Supported commands
 
