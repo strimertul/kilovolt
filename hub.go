@@ -111,14 +111,20 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			return
 		}
 
+		// Remap key if necessary
+		realKey := key
+		if client.options.RemapKeyFn != nil {
+			realKey = client.options.RemapKeyFn(realKey)
+		}
+
 		h.db.View(func(tx *badger.Txn) error {
-			val, err := tx.Get([]byte(key))
+			val, err := tx.Get([]byte(realKey))
 			if err != nil {
 				if err == badger.ErrKeyNotFound {
 					client.sendJSON(wsGenericResponse{"response", true, messageID, string("")})
 					h.logger.WithFields(logrus.Fields{
 						"client": client.conn.RemoteAddr(),
-						"key":    string(key),
+						"key":    string(realKey),
 					}).Debug("get for inexistant key")
 					return nil
 				}
@@ -131,7 +137,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			client.sendJSON(wsGenericResponse{"response", true, messageID, string(byt)})
 			h.logger.WithFields(logrus.Fields{
 				"client": client.conn.RemoteAddr(),
-				"key":    string(key),
+				"key":    string(realKey),
 			}).Debug("get key")
 			return nil
 		})
@@ -148,8 +154,14 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			return
 		}
 
+		// Remap key if necessary
+		realKey := key
+		if client.options.RemapKeyFn != nil {
+			realKey = client.options.RemapKeyFn(realKey)
+		}
+
 		err := h.db.Update(func(tx *badger.Txn) error {
-			return tx.Set([]byte(key), []byte(data))
+			return tx.Set([]byte(realKey), []byte(data))
 		})
 		if err != nil {
 			client.sendErr(ErrUpdateFailed, err.Error(), messageID)
@@ -159,7 +171,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
-			"key":    string(key),
+			"key":    string(realKey),
 		}).Debug("modified key")
 	case CmdSubscribeKey:
 		// Check params
@@ -168,14 +180,21 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", messageID)
 			return
 		}
-		_, ok = h.subscribers[key]
-		if !ok {
-			h.subscribers[key] = make(clientList)
+
+		// Remap key if necessary
+		realKey := key
+		if client.options.RemapKeyFn != nil {
+			realKey = client.options.RemapKeyFn(realKey)
 		}
-		h.subscribers[key][client] = true
+
+		_, ok = h.subscribers[realKey]
+		if !ok {
+			h.subscribers[realKey] = make(clientList)
+		}
+		h.subscribers[realKey][client] = true
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
-			"key":    string(key),
+			"key":    string(realKey),
 		}).Debug("subscribed to key")
 		// Send OK response
 		client.sendJSON(wsEmptyResponse{"response", true, messageID})
@@ -186,21 +205,28 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", messageID)
 			return
 		}
-		_, ok = h.subscribers[key]
+
+		// Remap key if necessary
+		realKey := key
+		if client.options.RemapKeyFn != nil {
+			realKey = client.options.RemapKeyFn(realKey)
+		}
+
+		_, ok = h.subscribers[realKey]
 		if !ok {
 			// No subscription, just say we're done
 			client.sendJSON(wsEmptyResponse{"response", true, messageID})
 			return
 		}
-		if _, ok := h.subscribers[key][client]; !ok {
+		if _, ok := h.subscribers[realKey][client]; !ok {
 			// No subscription from specific client, just say we're done
 			client.sendJSON(wsEmptyResponse{"response", true, messageID})
 			return
 		}
-		delete(h.subscribers[key], client)
+		delete(h.subscribers[realKey], client)
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
-			"key":    string(key),
+			"key":    string(realKey),
 		}).Debug("unsubscribed to key")
 		// Send OK response
 		client.sendJSON(wsEmptyResponse{"response", true, messageID})

@@ -43,6 +43,14 @@ type Client struct {
 
 	// Buffered channel of outbound messages.
 	send chan []byte
+
+	options ClientOptions
+}
+
+// ClientOptions is a list of tweakable options for clients
+type ClientOptions struct {
+	// RemapKeyFn is a optional function for remapping keys so they can be namespaced properly
+	RemapKeyFn func(key string) string
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -129,14 +137,19 @@ func (c *Client) sendErr(err ErrCode, details string, cmd string) {
 	c.sendJSON(wsError{false, err, details, cmd})
 }
 
-// serveWs handles websocket requests from the peer.
+// ServeWs is the legacy handler for WS
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	hub.CreateClient(w, r, ClientOptions{})
+}
+
+// CreateClient upgrades a HTTP request to websocket and makes it a client for the hub
+func (hub *Hub) CreateClient(w http.ResponseWriter, r *http.Request, options ClientOptions) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		hub.logger.WithField("error", err.Error()).Error("error starting websocket session")
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
+	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), options: options}
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in
