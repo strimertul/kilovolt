@@ -2,7 +2,7 @@
 
 Kilovolt exposes a WebSocket server and speaks using text JSON messages.
 
-**Note:** This documentation pertains to Kilovolt protocol version `v2`!
+**Note:** This documentation pertains to Kilovolt protocol version `v3`!
 
 ## Message format
 
@@ -13,11 +13,14 @@ Every client request comes in this format:
 ```json
 {
 	"command": "<cmd name>",
+  "request_id": "<any string here>",
 	"data": {
 		<command args here>
 	}
 }
 ```
+
+`request_id` is a client-generated string that will be added to the response. This is so you can have multiple requests running without having to block for each of them.
 
 ### Server messages
 
@@ -31,12 +34,12 @@ Responses are messages that are direct replies to client requests, they use this
 {
   "type": "response",
   "ok": true,
-  "cmd": "<client request message as text>",
+  "request_id": "<request_id from request>",
   "data": "<data, optional field>"
 }
 ```
 
-`cmd` is the text equivalent of the request the server is replying to, eg. `"{\"command\":\"kget\",\"data\":{\"key\":\"test\"}}"`. This is so you can have multiple requests running without having to block for each of them.
+If a `request_id` field is not provided, a `cmd` field will be added to the response with the text equivalent of the request the server is replying to, eg. `"{\"command\":\"kget\",\"data\":{\"key\":\"test\"}}"`. This is an older version of `request_id` that did not require client-generated IDs.
 
 `data` is optional and may not be provided if the request does not expect it, eg. a "set key" request.
 
@@ -65,7 +68,7 @@ They follow this format:
   "ok": false,
   "error": "<error code>",
   "details": "<text details>",
-  "cmd": "<client request message as text>"
+  "request_id": "<request_id from request>"
 }
 ```
 
@@ -92,7 +95,7 @@ Response
   "type": "response",
   "ok": true,
   "cmd": "{\"command\":\"version\"}",
-  "data": "v2"
+  "data": "v3"
 }
 ```
 
