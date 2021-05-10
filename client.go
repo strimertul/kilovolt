@@ -134,7 +134,7 @@ func (c *Client) sendJSON(data interface{}) {
 }
 
 func (c *Client) sendErr(err ErrCode, details string, cmd string) {
-	c.sendJSON(wsError{false, err, details, cmd})
+	c.sendJSON(Error{false, err, details, cmd})
 }
 
 // ServeWs is the legacy handler for WS

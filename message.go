@@ -20,32 +20,26 @@ const (
 	ErrUnknownCmd   = "unknown command"
 )
 
-type wsRequest struct {
+type Request struct {
 	CmdName string                 `json:"command"`
 	Data    map[string]interface{} `json:"data"`
 }
 
-type wsError struct {
+type Error struct {
 	Ok      bool    `json:"ok"`
 	Error   ErrCode `json:"error"`
 	Details string  `json:"details"`
 	Cmd     string  `json:"cmd"`
 }
 
-type wsGenericResponse struct {
+type Response struct {
 	CmdType string      `json:"type"`
 	Ok      bool        `json:"ok"`
 	Cmd     string      `json:"cmd"`
-	Data    interface{} `json:"data"`
+	Data    interface{} `json:"data,omitempty"`
 }
 
-type wsEmptyResponse struct {
-	CmdType string `json:"type"`
-	Ok      bool   `json:"ok"`
-	Cmd     string `json:"cmd"`
-}
-
-type wsPush struct {
+type Push struct {
 	CmdType  string `json:"type"`
 	Key      string `json:"key"`
 	NewValue string `json:"new_value"`

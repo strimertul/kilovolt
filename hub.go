@@ -61,7 +61,7 @@ func (h *Hub) update(kvs *pb.KVList) error {
 		// Check for subscribers
 		if subscribers, ok := h.subscribers[key]; ok {
 			// Notify subscribers
-			submsg, _ := json.Marshal(wsPush{"push", key, string(kv.Value)})
+			submsg, _ := json.Marshal(Push{"push", key, string(kv.Value)})
 			for client := range subscribers {
 				client.send <- submsg
 			}
@@ -94,7 +94,7 @@ func (h *Hub) WriteKey(key string, data string) error {
 }
 
 func (h *Hub) handleCmd(client *Client, message rawMessage) {
-	var msg wsRequest
+	var msg Request
 	messageID := string(message.Data)
 	err := json.Unmarshal(message.Data, &msg)
 	if err != nil {
@@ -121,7 +121,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			val, err := tx.Get([]byte(realKey))
 			if err != nil {
 				if err == badger.ErrKeyNotFound {
-					client.sendJSON(wsGenericResponse{"response", true, messageID, string("")})
+					client.sendJSON(Response{"response", true, messageID, string("")})
 					h.logger.WithFields(logrus.Fields{
 						"client": client.conn.RemoteAddr(),
 						"key":    string(realKey),
@@ -134,7 +134,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			if err != nil {
 				return err
 			}
-			client.sendJSON(wsGenericResponse{"response", true, messageID, string(byt)})
+			client.sendJSON(Response{"response", true, messageID, string(byt)})
 			h.logger.WithFields(logrus.Fields{
 				"client": client.conn.RemoteAddr(),
 				"key":    string(realKey),
@@ -167,7 +167,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			client.sendErr(ErrUpdateFailed, err.Error(), messageID)
 		}
 		// Send OK response
-		client.sendJSON(wsEmptyResponse{"response", true, messageID})
+		client.sendJSON(Response{"response", true, messageID, nil})
 
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
@@ -197,7 +197,7 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			"key":    string(realKey),
 		}).Debug("subscribed to key")
 		// Send OK response
-		client.sendJSON(wsEmptyResponse{"response", true, messageID})
+		client.sendJSON(Response{"response", true, messageID, nil})
 	case CmdUnsubscribeKey:
 		// Check params
 		key, ok := msg.Data["key"].(string)
@@ -215,12 +215,12 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 		_, ok = h.subscribers[realKey]
 		if !ok {
 			// No subscription, just say we're done
-			client.sendJSON(wsEmptyResponse{"response", true, messageID})
+			client.sendJSON(Response{"response", true, messageID, nil})
 			return
 		}
 		if _, ok := h.subscribers[realKey][client]; !ok {
 			// No subscription from specific client, just say we're done
-			client.sendJSON(wsEmptyResponse{"response", true, messageID})
+			client.sendJSON(Response{"response", true, messageID, nil})
 			return
 		}
 		delete(h.subscribers[realKey], client)
@@ -229,9 +229,9 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			"key":    string(realKey),
 		}).Debug("unsubscribed to key")
 		// Send OK response
-		client.sendJSON(wsEmptyResponse{"response", true, messageID})
+		client.sendJSON(Response{"response", true, messageID, nil})
 	case CmdProtoVersion:
-		client.sendJSON(wsGenericResponse{"response", true, messageID, ProtoVersion})
+		client.sendJSON(Response{"response", true, messageID, ProtoVersion})
 	default:
 		client.sendErr(ErrUnknownCmd, fmt.Sprintf("command \"%s\" is mistyped or not supported", msg.CmdName), messageID)
 	}
