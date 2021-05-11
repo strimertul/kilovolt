@@ -55,7 +55,7 @@ func main() {
 	hub := kv.NewHub(db, wrapLogger("kv"))
 	go hub.Run()
 
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		kv.ServeWs(hub, w, r)
 	})
 
