@@ -7,6 +7,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/pb"
 	jsoniter "github.com/json-iterator/go"
+	cmap "github.com/orcaman/concurrent-map"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,7 +24,7 @@ type Hub struct {
 	register   chan *Client
 	unregister chan *Client
 
-	subscribers map[string]clientList
+	subscribers cmap.ConcurrentMap // map[string]clientList
 
 	db *badger.DB
 
@@ -42,7 +43,7 @@ func NewHub(db *badger.DB, logger logrus.FieldLogger) *Hub {
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
 		clients:     make(clientList),
-		subscribers: make(map[string]clientList),
+		subscribers: cmap.New(), // make(map[string]clientList),
 		db:          db,
 		logger:      logger,
 	}
@@ -59,10 +60,10 @@ func (h *Hub) update(kvs *pb.KVList) error {
 		key := string(kv.Key)
 
 		// Check for subscribers
-		if subscribers, ok := h.subscribers[key]; ok {
+		if subscribers, ok := h.subscribers.Get(key); ok {
 			// Notify subscribers
 			submsg, _ := json.Marshal(Push{"push", key, string(kv.Value)})
-			for client := range subscribers {
+			for client := range subscribers.(clientList) {
 				client.send <- submsg
 			}
 		}
@@ -191,11 +192,15 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			realKey = client.options.RemapKeyFn(realKey)
 		}
 
-		_, ok = h.subscribers[realKey]
-		if !ok {
-			h.subscribers[realKey] = make(clientList)
+		if h.subscribers.Has(realKey) {
+			subs, _ := h.subscribers.Get(realKey)
+			subs.(clientList)[client] = true
+			h.subscribers.Set(realKey, subs)
+		} else {
+			subs := make(clientList)
+			subs[client] = true
+			h.subscribers.Set(realKey, subs)
 		}
-		h.subscribers[realKey][client] = true
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
 			"key":    string(realKey),
@@ -216,18 +221,20 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			realKey = client.options.RemapKeyFn(realKey)
 		}
 
-		_, ok = h.subscribers[realKey]
+		subs, ok := h.subscribers.Get(realKey)
 		if !ok {
 			// No subscription, just say we're done
 			client.sendJSON(Response{"response", true, messageID, msg.RequestID, nil})
 			return
 		}
-		if _, ok := h.subscribers[realKey][client]; !ok {
+		if _, ok := subs.(clientList)[client]; !ok {
 			// No subscription from specific client, just say we're done
 			client.sendJSON(Response{"response", true, messageID, msg.RequestID, nil})
 			return
 		}
-		delete(h.subscribers[realKey], client)
+		delete(subs.(clientList), client)
+		h.subscribers.Set(realKey, subs)
+
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
 			"key":    string(realKey),
@@ -253,9 +260,9 @@ func (h *Hub) Run() {
 				continue
 			}
 			// Unsubscribe from all keys
-			for key := range h.subscribers {
-				delete(h.subscribers[key], client)
-			}
+			h.subscribers.IterCb(func(key string, v interface{}) {
+				delete(v.(clientList), client)
+			})
 			// Delete entry and close channel
 			delete(h.clients, client)
 			close(client.send)
