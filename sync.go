@@ -32,3 +32,13 @@ func (c *clientList) Has(client *Client) bool {
 	_, ok := c.data[client]
 	return ok && c.data[client]
 }
+
+func (c *clientList) Clients() []*Client {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	clients := []*Client{}
+	for cl := range c.data {
+		clients = append(clients, cl)
+	}
+	return clients
+}

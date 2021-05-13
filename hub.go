@@ -61,9 +61,9 @@ func (h *Hub) update(kvs *pb.KVList) error {
 		if subscribers, ok := h.subscribers.Get(key); ok {
 			// Notify subscribers
 			submsg, _ := json.Marshal(Push{"push", key, string(kv.Value)})
-			subscribers.(cmap.ConcurrentMap).IterCb(func(key string, v interface{}) {
-				v.(*Client).send <- submsg
-			})
+			for _, client := range subscribers.(*clientList).Clients() {
+				client.send <- submsg
+			}
 		}
 	}
 	return nil
