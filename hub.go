@@ -16,10 +16,8 @@ type rawMessage struct {
 	Data   []byte
 }
 
-type clientList map[*Client]bool
-
 type Hub struct {
-	clients    clientList
+	clients    *clientList
 	incoming   chan rawMessage
 	register   chan *Client
 	unregister chan *Client
@@ -42,7 +40,7 @@ func NewHub(db *badger.DB, logger logrus.FieldLogger) *Hub {
 		incoming:    make(chan rawMessage, 10),
 		register:    make(chan *Client),
 		unregister:  make(chan *Client),
-		clients:     make(clientList),
+		clients:     newClientList(),
 		subscribers: cmap.New(), // make(map[string]clientList),
 		db:          db,
 		logger:      logger,
@@ -63,9 +61,9 @@ func (h *Hub) update(kvs *pb.KVList) error {
 		if subscribers, ok := h.subscribers.Get(key); ok {
 			// Notify subscribers
 			submsg, _ := json.Marshal(Push{"push", key, string(kv.Value)})
-			for client := range subscribers.(clientList) {
-				client.send <- submsg
-			}
+			subscribers.(cmap.ConcurrentMap).IterCb(func(key string, v interface{}) {
+				v.(*Client).send <- submsg
+			})
 		}
 	}
 	return nil
@@ -192,15 +190,15 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			realKey = client.options.RemapKeyFn(realKey)
 		}
 
+		var subs *clientList
 		if h.subscribers.Has(realKey) {
-			subs, _ := h.subscribers.Get(realKey)
-			subs.(clientList)[client] = true
-			h.subscribers.Set(realKey, subs)
+			data, _ := h.subscribers.Get(realKey)
+			subs = data.(*clientList)
 		} else {
-			subs := make(clientList)
-			subs[client] = true
-			h.subscribers.Set(realKey, subs)
+			subs = newClientList()
 		}
+		subs.AddClient(client)
+		h.subscribers.Set(realKey, subs)
 		h.logger.WithFields(logrus.Fields{
 			"client": client.conn.RemoteAddr(),
 			"key":    string(realKey),
@@ -221,18 +219,19 @@ func (h *Hub) handleCmd(client *Client, message rawMessage) {
 			realKey = client.options.RemapKeyFn(realKey)
 		}
 
-		subs, ok := h.subscribers.Get(realKey)
+		data, ok := h.subscribers.Get(realKey)
 		if !ok {
 			// No subscription, just say we're done
 			client.sendJSON(Response{"response", true, messageID, msg.RequestID, nil})
 			return
 		}
-		if _, ok := subs.(clientList)[client]; !ok {
+		subs := data.(*clientList)
+		if subs.Has(client); !ok {
 			// No subscription from specific client, just say we're done
 			client.sendJSON(Response{"response", true, messageID, msg.RequestID, nil})
 			return
 		}
-		delete(subs.(clientList), client)
+		subs.RemoveClient(client)
 		h.subscribers.Set(realKey, subs)
 
 		h.logger.WithFields(logrus.Fields{
@@ -253,19 +252,17 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case client := <-h.register:
-			h.clients[client] = true
+			// Generate ID
+			h.clients.AddClient(client)
 		case client := <-h.unregister:
-			// Make sure client is considered active first
-			if _, ok := h.clients[client]; !ok {
-				continue
-			}
 			// Unsubscribe from all keys
-			h.subscribers.IterCb(func(key string, v interface{}) {
-				delete(v.(clientList), client)
-			})
+			for k := range h.subscribers.IterBuffered() {
+				k.Val.(*clientList).RemoveClient(client)
+			}
 			// Delete entry and close channel
-			delete(h.clients, client)
+			h.clients.RemoveClient(client)
 			close(client.send)
+
 		case message := <-h.incoming:
 			h.handleCmd(message.Client, message)
 		}
