@@ -34,8 +34,19 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
+type Client interface {
+	Options() ClientOptions
+	Close()
+
+	SendMessage([]byte)
+	SendJSON(interface{})
+
+	SetUID(int64)
+	UID() int64
+}
+
 // Client is a middleman between the websocket connection and the hub.
-type Client struct {
+type WebsocketClient struct {
 	hub *Hub
 
 	// Unique ID
@@ -46,8 +57,6 @@ type Client struct {
 
 	// Buffered channel of outbound messages.
 	send chan []byte
-
-	subscriptions map[string]bool
 
 	options ClientOptions
 }
@@ -63,7 +72,7 @@ type ClientOptions struct {
 // The application runs readPump in a per-connection goroutine. The application
 // ensures that there is at most one reader on a connection by executing all
 // reads from this goroutine.
-func (c *Client) readPump(hub *Hub) {
+func (c *WebsocketClient) readPump(hub *Hub) {
 	defer func() {
 		c.hub.unregister <- c
 		c.conn.Close()
@@ -92,7 +101,7 @@ func (c *Client) readPump(hub *Hub) {
 // A goroutine running writePump is started for each connection. The
 // application ensures that there is at most one writer to a connection by
 // executing all writes from this goroutine.
-func (c *Client) writePump() {
+func (c *WebsocketClient) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -133,13 +142,29 @@ func (c *Client) writePump() {
 	}
 }
 
-func (c *Client) sendJSON(data interface{}) {
+func (c *WebsocketClient) SetUID(uid int64) {
+	c.uid = uid
+}
+
+func (c *WebsocketClient) UID() int64 {
+	return c.uid
+}
+
+func (c *WebsocketClient) SendJSON(data interface{}) {
 	msg, _ := json.Marshal(data)
 	c.send <- msg
 }
 
-func (c *Client) sendErr(err ErrCode, details string, requestID string) {
-	c.sendJSON(Error{false, err, details, requestID})
+func (c *WebsocketClient) SendMessage(data []byte) {
+	c.send <- data
+}
+
+func (c *WebsocketClient) Options() ClientOptions {
+	return c.options
+}
+
+func (c *WebsocketClient) Close() {
+	close(c.send)
 }
 
 // ServeWs is the legacy handler for WS
@@ -154,9 +179,9 @@ func (hub *Hub) CreateClient(w http.ResponseWriter, r *http.Request, options Cli
 		hub.logger.WithField("error", err.Error()).Error("error starting websocket session")
 		return
 	}
-	client := &Client{
+	client := &WebsocketClient{
 		hub: hub, conn: conn,
-		send: make(chan []byte, 256), options: options, subscriptions: make(map[string]bool),
+		send: make(chan []byte, 256), options: options,
 	}
 	client.hub.register <- client
 

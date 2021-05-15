@@ -94,7 +94,6 @@ Response
 {
   "type": "response",
   "ok": true,
-  "request_id": "{\"command\":\"version\"}",
   "data": "v4"
 }
 ```
@@ -125,7 +124,6 @@ Response
 {
   "type": "response",
   "ok": true,
-  "request_id": "{\"command\":\"kget\",\"data\":{\"key\":\"my-key\"}}",
   "data": "key value"
 }
 ```
@@ -153,8 +151,7 @@ Response
 ```json
 {
   "type": "response",
-  "ok": true,
-  "request_id": "{\"command\":\"kset\",\"data\":{\"key\":\"my-key\",\"data\":\"key value\"}}"
+  "ok": true
 }
 ```
 
@@ -185,8 +182,7 @@ Response
 ```json
 {
   "type": "response",
-  "ok": true,
-  "request_id": "{\"command\":\"ksub\",\"data\":{\"key\":\"my-key\"}}"
+  "ok": true
 }
 ```
 
@@ -219,8 +215,7 @@ Response
 ```json
 {
   "type": "response",
-  "ok": true,
-  "request_id": "{\"command\":\"kunsub\",\"data\":{\"key\":\"my-key\"}}"
+  "ok": true
 }
 ```
 

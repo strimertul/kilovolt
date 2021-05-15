@@ -11,15 +11,15 @@ import (
 )
 
 type rawMessage struct {
-	Client *Client
+	Client Client
 	Data   []byte
 }
 
 type Hub struct {
 	clients    *clientList
 	incoming   chan rawMessage
-	register   chan *Client
-	unregister chan *Client
+	register   chan Client
+	unregister chan Client
 
 	db    *badger.DB
 	memdb *badger.DB
@@ -42,8 +42,8 @@ func NewHub(db *badger.DB, logger logrus.FieldLogger) (*Hub, error) {
 
 	hub := &Hub{
 		incoming:   make(chan rawMessage, 10),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
+		register:   make(chan Client),
+		unregister: make(chan Client),
 		clients:    newClientList(),
 		db:         db,
 		memdb:      inmemdb,
@@ -77,35 +77,36 @@ func (h *Hub) update(kvs *pb.KVList) error {
 		for _, clientid := range subscribers {
 			client, ok := h.clients.GetByID(clientid)
 			if ok {
-				client.send <- submsg
+				client.SendMessage(submsg)
 			}
 		}
 	}
 	return nil
 }
 
-func (h *Hub) handleCmd(client *Client, message rawMessage) {
+func (h *Hub) handleCmd(client Client, message rawMessage) {
 	// Decode request
 	var msg Request
 	err := json.Unmarshal(message.Data, &msg)
 	if err != nil {
-		message.Client.sendErr(ErrInvalidFmt, err.Error(), msg.RequestID)
+		sendErr(message.Client, ErrInvalidFmt, err.Error(), msg.RequestID)
 		return
-	}
-	if msg.RequestID == "" {
-		msg.RequestID = string(message.Data)
 	}
 
 	// Get handler for command
 	handler, ok := handlers[msg.CmdName]
 	if !ok {
 		// No handler found, send invalid command
-		client.sendErr(ErrUnknownCmd, fmt.Sprintf("command \"%s\" is mistyped or not supported", msg.CmdName), msg.RequestID)
+		sendErr(client, ErrUnknownCmd, fmt.Sprintf("command \"%s\" is mistyped or not supported", msg.CmdName), msg.RequestID)
 		return
 	}
 
 	// Run handler
 	handler(h, client, msg)
+}
+
+func sendErr(client Client, err ErrCode, details string, requestID string) {
+	client.SendJSON(Error{false, err, details, requestID})
 }
 
 func (h *Hub) Run() {
@@ -118,11 +119,11 @@ func (h *Hub) Run() {
 		case client := <-h.unregister:
 			// Unsubscribe from all keys
 			if err := dbUnsubscribeFromAll(h.memdb, client); err != nil {
-				h.logger.WithError(err).WithField("clientid", client.uid).Error("error removing subscriptions for client")
+				h.logger.WithError(err).WithField("clientid", client.UID()).Error("error removing subscriptions for client")
 			}
 			// Delete entry and close channel
 			h.clients.RemoveClient(client)
-			close(client.send)
+			client.Close()
 
 		case message := <-h.incoming:
 			h.handleCmd(message.Client, message)

@@ -8,7 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type commandHandlerFn func(*Hub, *Client, Request)
+type commandHandlerFn func(*Hub, Client, Request)
 
 var handlers = map[string]commandHandlerFn{
 	CmdReadKey:           cmdReadKey,
@@ -23,27 +23,28 @@ var handlers = map[string]commandHandlerFn{
 	CmdProtoVersion:      cmdProtoVersion,
 }
 
-func cmdReadKey(h *Hub, client *Client, msg Request) {
+func cmdReadKey(h *Hub, client Client, msg Request) {
 	// Check params
 	key, ok := msg.Data["key"].(string)
 	if !ok {
-		client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", msg.RequestID)
+		sendErr(client, ErrMissingParam, "invalid or missing 'key' parameter", msg.RequestID)
 		return
 	}
 
 	// Remap key if necessary
 	realKey := key
-	if client.options.RemapKeyFn != nil {
-		realKey = client.options.RemapKeyFn(realKey)
+	options := client.Options()
+	if options.RemapKeyFn != nil {
+		realKey = options.RemapKeyFn(realKey)
 	}
 
 	err := h.db.View(func(tx *badger.Txn) error {
 		val, err := tx.Get([]byte(realKey))
 		if err != nil {
 			if err == badger.ErrKeyNotFound {
-				client.sendJSON(Response{"response", true, msg.RequestID, string("")})
+				client.SendJSON(Response{"response", true, msg.RequestID, string("")})
 				h.logger.WithFields(logrus.Fields{
-					"client": client.conn.RemoteAddr(),
+					"client": client.UID(),
 					"key":    string(realKey),
 				}).Debug("get for inexistant key")
 				return nil
@@ -54,25 +55,25 @@ func cmdReadKey(h *Hub, client *Client, msg Request) {
 		if err != nil {
 			return err
 		}
-		client.sendJSON(Response{"response", true, msg.RequestID, string(byt)})
+		client.SendJSON(Response{"response", true, msg.RequestID, string(byt)})
 		h.logger.WithFields(logrus.Fields{
-			"client": client.conn.RemoteAddr(),
+			"client": client.UID(),
 			"key":    string(realKey),
 		}).Debug("get key")
 		return nil
 	})
 
 	if err != nil {
-		client.sendErr(ErrServerError, err.Error(), msg.RequestID)
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
 }
 
-func cmdReadBulk(h *Hub, client *Client, msg Request) {
+func cmdReadBulk(h *Hub, client Client, msg Request) {
 	// Check params
 	keys, ok := msg.Data["keys"].([]string)
 	if !ok {
-		client.sendErr(ErrMissingParam, "invalid or missing 'keys' parameter", msg.RequestID)
+		sendErr(client, ErrMissingParam, "invalid or missing 'keys' parameter", msg.RequestID)
 		return
 	}
 
@@ -80,8 +81,9 @@ func cmdReadBulk(h *Hub, client *Client, msg Request) {
 	for index, key := range keys {
 		// Remap key if necessary
 		realKeys[index] = key
-		if client.options.RemapKeyFn != nil {
-			realKeys[index] = client.options.RemapKeyFn(key)
+		options := client.Options()
+		if options.RemapKeyFn != nil {
+			realKeys[index] = options.RemapKeyFn(key)
 		}
 	}
 
@@ -105,28 +107,29 @@ func cmdReadBulk(h *Hub, client *Client, msg Request) {
 		return nil
 	})
 	if err != nil {
-		client.sendErr(ErrServerError, "server error: "+err.Error(), msg.RequestID)
+		sendErr(client, ErrServerError, "server error: "+err.Error(), msg.RequestID)
 		return
 	}
 	h.logger.WithFields(logrus.Fields{
-		"client": client.conn.RemoteAddr(),
+		"client": client.UID(),
 		"keys":   realKeys,
 	}).Debug("get multi key")
-	client.sendJSON(Response{"response", true, msg.RequestID, out})
+	client.SendJSON(Response{"response", true, msg.RequestID, out})
 }
 
-func cmdReadPrefix(h *Hub, client *Client, msg Request) {
+func cmdReadPrefix(h *Hub, client Client, msg Request) {
 	// Check params
 	prefix, ok := msg.Data["prefix"].(string)
 	if !ok {
-		client.sendErr(ErrMissingParam, "invalid or missing 'prefix' parameter", msg.RequestID)
+		sendErr(client, ErrMissingParam, "invalid or missing 'prefix' parameter", msg.RequestID)
 		return
 	}
 
 	// Remap key if necessary
 	realPrefix := prefix
-	if client.options.RemapKeyFn != nil {
-		realPrefix = client.options.RemapKeyFn(realPrefix)
+	options := client.Options()
+	if options.RemapKeyFn != nil {
+		realPrefix = options.RemapKeyFn(realPrefix)
 	}
 
 	out := make(map[string]string)
@@ -147,63 +150,65 @@ func cmdReadPrefix(h *Hub, client *Client, msg Request) {
 		return nil
 	})
 	if err != nil {
-		client.sendErr(ErrServerError, "server error: "+err.Error(), msg.RequestID)
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
 	h.logger.WithFields(logrus.Fields{
-		"client": client.conn.RemoteAddr(),
+		"client": client.UID(),
 		"prefix": prefix,
 	}).Debug("get all (prefix)")
-	client.sendJSON(Response{"response", true, msg.RequestID, out})
+	client.SendJSON(Response{"response", true, msg.RequestID, out})
 }
 
-func cmdWriteKey(h *Hub, client *Client, msg Request) {
+func cmdWriteKey(h *Hub, client Client, msg Request) {
 	// Check params
 	key, ok := msg.Data["key"].(string)
 	if !ok {
-		client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", msg.RequestID)
+		sendErr(client, ErrMissingParam, "invalid or missing 'key' parameter", msg.RequestID)
 		return
 	}
 	data, ok := msg.Data["data"].(string)
 	if !ok {
-		client.sendErr(ErrMissingParam, "invalid or missing 'data' parameter", msg.RequestID)
+		sendErr(client, ErrMissingParam, "invalid or missing 'data' parameter", msg.RequestID)
 		return
 	}
 
 	// Remap key if necessary
 	realKey := key
-	if client.options.RemapKeyFn != nil {
-		realKey = client.options.RemapKeyFn(realKey)
+	options := client.Options()
+	if options.RemapKeyFn != nil {
+		realKey = options.RemapKeyFn(realKey)
 	}
 
 	err := h.db.Update(func(tx *badger.Txn) error {
 		return tx.Set([]byte(realKey), []byte(data))
 	})
 	if err != nil {
-		client.sendErr(ErrServerError, err.Error(), msg.RequestID)
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
 	// Send OK response
-	client.sendJSON(Response{"response", true, msg.RequestID, nil})
+	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 
 	h.logger.WithFields(logrus.Fields{
-		"client": client.conn.RemoteAddr(),
+		"client": client.UID(),
 		"key":    string(realKey),
 	}).Debug("modified key")
 }
 
-func cmdWriteBulk(h *Hub, client *Client, msg Request) {
+func cmdWriteBulk(h *Hub, client Client, msg Request) {
 	// Copy data over
 	kvs := make(map[string]string)
 	for k, v := range msg.Data {
 		strval, ok := v.(string)
 		if !ok {
-			client.sendErr(ErrInvalidFmt, fmt.Sprintf("invalid value for key \"%s\"", k), msg.RequestID)
+			sendErr(client, ErrInvalidFmt, fmt.Sprintf("invalid value for key \"%s\"", k), msg.RequestID)
 			return
 		}
 		// Remap keys if necessary
-		if client.options.RemapKeyFn != nil {
-			k = client.options.RemapKeyFn(k)
+		options := client.Options()
+		if options.RemapKeyFn != nil {
+			k = options.RemapKeyFn(k)
 		}
 		kvs[k] = strval
 	}
@@ -222,124 +227,128 @@ func cmdWriteBulk(h *Hub, client *Client, msg Request) {
 		return nil
 	})
 	if err != nil {
-		client.sendErr(ErrServerError, err.Error(), msg.RequestID)
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
 	// Send OK response
-	client.sendJSON(Response{"response", true, msg.RequestID, nil})
+	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 
 	h.logger.WithFields(logrus.Fields{
-		"client": client.conn.RemoteAddr(),
+		"client": client.UID(),
 	}).Debug("bulk modify keys")
 }
 
-func cmdSubscribeKey(h *Hub, client *Client, msg Request) {
+func cmdSubscribeKey(h *Hub, client Client, msg Request) {
 	// Check params
 	key, ok := msg.Data["key"].(string)
 	if !ok {
-		client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", msg.RequestID)
+		sendErr(client, ErrMissingParam, "invalid or missing 'key' parameter", msg.RequestID)
 		return
 	}
 
 	// Remap key if necessary
 	realKey := key
-	if client.options.RemapKeyFn != nil {
-		realKey = client.options.RemapKeyFn(realKey)
+	options := client.Options()
+	if options.RemapKeyFn != nil {
+		realKey = options.RemapKeyFn(realKey)
 	}
 
 	if err := dbSubscribeToKey(h.memdb, client, realKey); err != nil {
-		client.sendErr(ErrServerError, err.Error(), msg.RequestID)
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
 	h.logger.WithFields(logrus.Fields{
-		"client": client.conn.RemoteAddr(),
+		"client": client.UID(),
 		"key":    string(realKey),
 	}).Debug("subscribed to key")
 	// Send OK response
-	client.sendJSON(Response{"response", true, msg.RequestID, nil})
+	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 }
 
-func cmdSubscribePrefix(h *Hub, client *Client, msg Request) {
+func cmdSubscribePrefix(h *Hub, client Client, msg Request) {
 	// Check params
 	prefix, ok := msg.Data["prefix"].(string)
 	if !ok {
-		client.sendErr(ErrMissingParam, "invalid or missing 'prefix' parameter", msg.RequestID)
+		sendErr(client, ErrMissingParam, "invalid or missing 'prefix' parameter", msg.RequestID)
 		return
 	}
 
 	// Remap key if necessary
 	realPrefix := prefix
-	if client.options.RemapKeyFn != nil {
-		realPrefix = client.options.RemapKeyFn(realPrefix)
+	options := client.Options()
+	if options.RemapKeyFn != nil {
+		realPrefix = options.RemapKeyFn(realPrefix)
 	}
 
 	if err := dbSubscribeToPrefix(h.memdb, client, realPrefix); err != nil {
-		client.sendErr(ErrServerError, err.Error(), msg.RequestID)
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
 	h.logger.WithFields(logrus.Fields{
-		"client": client.conn.RemoteAddr(),
+		"client": client.UID(),
 		"prefix": string(realPrefix),
 	}).Debug("subscribed to prefix")
 	// Send OK response
-	client.sendJSON(Response{"response", true, msg.RequestID, nil})
+	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 }
 
-func cmdUnsubscribeKey(h *Hub, client *Client, msg Request) {
+func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
 	// Check params
 	key, ok := msg.Data["key"].(string)
 	if !ok {
-		client.sendErr(ErrMissingParam, "invalid or missing 'key' parameter", msg.RequestID)
+		sendErr(client, ErrMissingParam, "invalid or missing 'key' parameter", msg.RequestID)
 		return
 	}
 
 	// Remap key if necessary
 	realKey := key
-	if client.options.RemapKeyFn != nil {
-		realKey = client.options.RemapKeyFn(realKey)
+	options := client.Options()
+	if options.RemapKeyFn != nil {
+		realKey = options.RemapKeyFn(realKey)
 	}
 
 	if err := dbUnsubscribeFromKey(h.memdb, client, realKey); err != nil {
-		client.sendErr(ErrServerError, err.Error(), msg.RequestID)
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
 	h.logger.WithFields(logrus.Fields{
-		"client": client.conn.RemoteAddr(),
+		"client": client.UID(),
 		"key":    string(realKey),
 	}).Debug("unsubscribed to key")
 	// Send OK response
-	client.sendJSON(Response{"response", true, msg.RequestID, nil})
+	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 
 }
 
-func cmdUnsubscribePrefix(h *Hub, client *Client, msg Request) {
+func cmdUnsubscribePrefix(h *Hub, client Client, msg Request) {
 	// Check params
 	prefix, ok := msg.Data["prefix"].(string)
 	if !ok {
-		client.sendErr(ErrMissingParam, "invalid or missing 'prefix' parameter", msg.RequestID)
+		sendErr(client, ErrMissingParam, "invalid or missing 'prefix' parameter", msg.RequestID)
 		return
 	}
 
 	// Remap key if necessary
 	realPrefix := prefix
-	if client.options.RemapKeyFn != nil {
-		realPrefix = client.options.RemapKeyFn(realPrefix)
+	options := client.Options()
+	if options.RemapKeyFn != nil {
+		realPrefix = options.RemapKeyFn(realPrefix)
 	}
 
 	// Add to prefix subscriber map
 	if err := dbUnsubscribeFromPrefix(h.memdb, client, realPrefix); err != nil {
-		client.sendErr(ErrServerError, err.Error(), msg.RequestID)
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
 	h.logger.WithFields(logrus.Fields{
-		"client": client.conn.RemoteAddr(),
+		"client": client.UID(),
 		"prefix": string(realPrefix),
 	}).Debug("unsubscribed from prefix")
 
 	// Send OK response
-	client.sendJSON(Response{"response", true, msg.RequestID, nil})
+	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 }
 
-func cmdProtoVersion(h *Hub, client *Client, msg Request) {
-	client.sendJSON(Response{"response", true, msg.RequestID, ProtoVersion})
+func cmdProtoVersion(h *Hub, client Client, msg Request) {
+	client.SendJSON(Response{"response", true, msg.RequestID, ProtoVersion})
 }
