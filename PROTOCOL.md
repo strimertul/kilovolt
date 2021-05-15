@@ -2,7 +2,7 @@
 
 Kilovolt exposes a WebSocket server and speaks using text JSON messages.
 
-**Note:** This documentation pertains to Kilovolt protocol version `v3`!
+**Note:** This documentation pertains to Kilovolt protocol version `v4`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
 
 ## Message format
 
@@ -20,7 +20,7 @@ Every client request comes in this format:
 }
 ```
 
-`request_id` is a client-generated string that will be added to the response. This is so you can have multiple requests running without having to block for each of them.
+`request_id` is a client-generated string that will be added to the response. This is so you can have multiple requests running without having to block for each of them. If you don't provide a request_id, the server will make one for you depending on the request.
 
 ### Server messages
 
@@ -39,7 +39,7 @@ Responses are messages that are direct replies to client requests, they use this
 }
 ```
 
-If a `request_id` field is not provided, a `cmd` field will be added to the response with the text equivalent of the request the server is replying to, eg. `"{\"command\":\"kget\",\"data\":{\"key\":\"test\"}}"`. This is an older version of `request_id` that did not require client-generated IDs.
+If a `request_id` field is not provided, the response `request_id` field will be added to the response with the text equivalent of the request the server is replying to, eg. `"{\"command\":\"kget\",\"data\":{\"key\":\"test\"}}"`. This is an older version of `request_id` that did not require client-generated IDs.
 
 `data` is optional and may not be provided if the request does not expect it, eg. a "set key" request.
 
@@ -94,8 +94,8 @@ Response
 {
   "type": "response",
   "ok": true,
-  "cmd": "{\"command\":\"version\"}",
-  "data": "v3"
+  "request_id": "{\"command\":\"version\"}",
+  "data": "v4"
 }
 ```
 
@@ -125,10 +125,18 @@ Response
 {
   "type": "response",
   "ok": true,
-  "cmd": "{\"command\":\"kget\",\"data\":{\"key\":\"my-key\"}}",
+  "request_id": "{\"command\":\"kget\",\"data\":{\"key\":\"my-key\"}}",
   "data": "key value"
 }
 ```
+
+### `kget-bulk` - Get multiple keys
+
+TODO
+
+### `kget-all` - Get all keys with given prefix
+
+TODO
 
 ### `kset` - Set key
 
@@ -146,9 +154,13 @@ Response
 {
   "type": "response",
   "ok": true,
-  "cmd": "{\"command\":\"kset\",\"data\":{\"key\":\"my-key\",\"data\":\"key value\"}}"
+  "request_id": "{\"command\":\"kset\",\"data\":{\"key\":\"my-key\",\"data\":\"key value\"}}"
 }
 ```
+
+### `kset-bulk` - Set multiple keys
+
+TODO
 
 ### `ksub` - Subscribe to key
 
@@ -174,7 +186,7 @@ Response
 {
   "type": "response",
   "ok": true,
-  "cmd": "{\"command\":\"ksub\",\"data\":{\"key\":\"my-key\"}}"
+  "request_id": "{\"command\":\"ksub\",\"data\":{\"key\":\"my-key\"}}"
 }
 ```
 
@@ -208,9 +220,17 @@ Response
 {
   "type": "response",
   "ok": true,
-  "cmd": "{\"command\":\"kunsub\",\"data\":{\"key\":\"my-key\"}}"
+  "request_id": "{\"command\":\"kunsub\",\"data\":{\"key\":\"my-key\"}}"
 }
 ```
+
+### `ksub-prefix` - Subscribe to prefix
+
+TODO
+
+### `kunsub-prefix` - Unsubscribe from prefix
+
+TODO
 
 ## Error codes
 
@@ -220,5 +240,5 @@ These are all the possible error codes that can be returned, make sure to check 
 | ---------------------------- | -------------------------------------------------------------------------- |
 | `invalid message format`     | Request received was not valid JSON                                        |
 | `required parameter missing` | One or more required parameters were not supplied in the `data` dictionary |
-| `server update failed`       | The underlying database returned error upon update                         |
+| `server error`               | The underlying database returned error                                     |
 | `unknown command`            | Command in request is not supported                                        |

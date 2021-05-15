@@ -38,11 +38,16 @@ var upgrader = websocket.Upgrader{
 type Client struct {
 	hub *Hub
 
+	// Unique ID
+	uid int64
+
 	// The websocket connection.
 	conn *websocket.Conn
 
 	// Buffered channel of outbound messages.
 	send chan []byte
+
+	subscriptions map[string]bool
 
 	options ClientOptions
 }
@@ -133,8 +138,8 @@ func (c *Client) sendJSON(data interface{}) {
 	c.send <- msg
 }
 
-func (c *Client) sendErr(err ErrCode, details string, cmd string, requestID string) {
-	c.sendJSON(Error{false, err, details, cmd, requestID})
+func (c *Client) sendErr(err ErrCode, details string, requestID string) {
+	c.sendJSON(Error{false, err, details, requestID})
 }
 
 // ServeWs is the legacy handler for WS
@@ -149,7 +154,10 @@ func (hub *Hub) CreateClient(w http.ResponseWriter, r *http.Request, options Cli
 		hub.logger.WithField("error", err.Error()).Error("error starting websocket session")
 		return
 	}
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), options: options}
+	client := &Client{
+		hub: hub, conn: conn,
+		send: make(chan []byte, 256), options: options, subscriptions: make(map[string]bool),
+	}
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in

@@ -1,22 +1,27 @@
 package kv
 
+const ProtoVersion = "v4"
+
 // Commands
 const (
-	CmdProtoVersion   = "version"
-	CmdReadKey        = "kget"
-	CmdWriteKey       = "kset"
-	CmdSubscribeKey   = "ksub"
-	CmdUnsubscribeKey = "kunsub"
+	CmdProtoVersion      = "version"
+	CmdReadKey           = "kget"
+	CmdReadBulk          = "kget-bulk"
+	CmdReadPrefix        = "kget-all"
+	CmdWriteKey          = "kset"
+	CmdWriteBulk         = "kset-bulk"
+	CmdSubscribeKey      = "ksub"
+	CmdSubscribePrefix   = "ksub-prefix"
+	CmdUnsubscribeKey    = "kunsub"
+	CmdUnsubscribePrefix = "kunsub-prefix"
 )
-
-const ProtoVersion = "v3"
 
 type ErrCode string
 
 const (
+	ErrServerError  = "server error"
 	ErrInvalidFmt   = "invalid message format"
 	ErrMissingParam = "required parameter missing"
-	ErrUpdateFailed = "server update failed"
 	ErrUnknownCmd   = "unknown command"
 )
 
@@ -30,14 +35,12 @@ type Error struct {
 	Ok        bool    `json:"ok"`
 	Error     ErrCode `json:"error"`
 	Details   string  `json:"details"`
-	Cmd       string  `json:"cmd,omitempty"`
 	RequestID string  `json:"request_id,omitempty"`
 }
 
 type Response struct {
 	CmdType   string      `json:"type"`
 	Ok        bool        `json:"ok"`
-	Cmd       string      `json:"cmd"`
 	RequestID string      `json:"request_id,omitempty"`
 	Data      interface{} `json:"data,omitempty"`
 }

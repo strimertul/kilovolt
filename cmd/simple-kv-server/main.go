@@ -52,7 +52,10 @@ func main() {
 	defer db.Close()
 
 	// Initialize KV (required)
-	hub := kv.NewHub(db, wrapLogger("kv"))
+	hub, err := kv.NewHub(db, wrapLogger("kv"))
+	if err != nil {
+		panic(err)
+	}
 	go hub.Run()
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
