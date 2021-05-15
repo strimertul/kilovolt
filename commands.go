@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/dgraph-io/badger/v3"
-	jsoniter "github.com/json-iterator/go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -71,7 +70,7 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 
 func cmdReadBulk(h *Hub, client Client, msg Request) {
 	// Check params
-	keys, ok := msg.Data["keys"].([]string)
+	keys, ok := msg.Data["keys"].([]interface{})
 	if !ok {
 		sendErr(client, ErrMissingParam, "invalid or missing 'keys' parameter", msg.RequestID)
 		return
@@ -80,10 +79,14 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 	realKeys := make([]string, len(keys))
 	for index, key := range keys {
 		// Remap key if necessary
-		realKeys[index] = key
+		realKeys[index], ok = key.(string)
+		if !ok {
+			sendErr(client, ErrMissingParam, "invalid entry in 'keys' parameter", msg.RequestID)
+			return
+		}
 		options := client.Options()
 		if options.RemapKeyFn != nil {
-			realKeys[index] = options.RemapKeyFn(key)
+			realKeys[index] = options.RemapKeyFn(realKeys[index])
 		}
 	}
 
@@ -215,11 +218,7 @@ func cmdWriteBulk(h *Hub, client Client, msg Request) {
 
 	err := h.db.Update(func(tx *badger.Txn) error {
 		for k, v := range kvs {
-			byt, err := jsoniter.ConfigDefault.Marshal(v)
-			if err != nil {
-				return err
-			}
-			err = tx.Set([]byte(k), byt)
+			err := tx.Set([]byte(k), []byte(v))
 			if err != nil {
 				return err
 			}

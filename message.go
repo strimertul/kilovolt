@@ -50,3 +50,8 @@ type Push struct {
 	Key      string `json:"key"`
 	NewValue string `json:"new_value"`
 }
+
+type Hello struct {
+	CmdType string `json:"type"`
+	Version string `json:"version"`
+}

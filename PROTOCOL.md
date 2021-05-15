@@ -26,6 +26,17 @@ Every client request comes in this format:
 
 Messages coming from the server can be of three types:
 
+#### Hello
+
+The Hello message is delivered as soon as a connection is established and contains the version of the protocol used by the server.
+
+```json
+{
+  "type": "hello",
+  "version": "v4"
+}
+```
+
 #### Response
 
 Responses are messages that are direct replies to client requests, they use this format:

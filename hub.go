@@ -42,8 +42,8 @@ func NewHub(db *badger.DB, logger logrus.FieldLogger) (*Hub, error) {
 
 	hub := &Hub{
 		incoming:   make(chan rawMessage, 10),
-		register:   make(chan Client),
-		unregister: make(chan Client),
+		register:   make(chan Client, 10),
+		unregister: make(chan Client, 10),
 		clients:    newClientList(),
 		db:         db,
 		memdb:      inmemdb,
@@ -116,11 +116,16 @@ func (h *Hub) Run() {
 		case client := <-h.register:
 			// Generate ID
 			h.clients.AddClient(client)
+
+			// Send welcome message
+			client.SendJSON(Hello{CmdType: "hello", Version: ProtoVersion})
+
 		case client := <-h.unregister:
 			// Unsubscribe from all keys
 			if err := dbUnsubscribeFromAll(h.memdb, client); err != nil {
 				h.logger.WithError(err).WithField("clientid", client.UID()).Error("error removing subscriptions for client")
 			}
+
 			// Delete entry and close channel
 			h.clients.RemoveClient(client)
 			client.Close()
