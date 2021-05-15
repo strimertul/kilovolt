@@ -84,29 +84,6 @@ func (h *Hub) update(kvs *pb.KVList) error {
 	return nil
 }
 
-func (h *Hub) ReadKey(key string) (string, error) {
-	tx := h.db.NewTransaction(false)
-	defer tx.Discard()
-
-	val, err := tx.Get([]byte(key))
-	if err != nil {
-		return "", err
-	}
-	byt, err := val.ValueCopy(nil)
-	return string(byt), err
-}
-
-func (h *Hub) WriteKey(key string, data string) error {
-	tx := h.db.NewTransaction(true)
-	defer tx.Discard()
-
-	err := tx.Set([]byte(key), []byte(data))
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
 func (h *Hub) handleCmd(client *Client, message rawMessage) {
 	// Decode request
 	var msg Request
