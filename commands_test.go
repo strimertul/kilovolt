@@ -92,48 +92,54 @@ func TestCommands(t *testing.T) {
 	//
 
 	// Missing parameters
-	t.Run("errors", func(t *testing.T) {
-		noParams := []string{
-			CmdReadKey, CmdReadBulk, CmdReadPrefix, CmdWriteKey, CmdWriteBulk,
-			CmdSubscribeKey, CmdSubscribePrefix, CmdUnsubscribeKey, CmdUnsubscribePrefix,
-		}
-		for _, cmd := range noParams {
-			t.Run(cmd+" with wrong key", func(t *testing.T) {
-				t.Parallel()
-				req, chn := client1.MakeRequest(cmd, map[string]interface{}{
-					"@dingus": "bogus",
-				})
-				hub.incoming <- req
-				resp := mustFail(t, waitReply(t, chn))
-				// Check that reply is correct (empty)
-				if resp.Error != ErrMissingParam {
-					t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrMissingParam, resp.Error)
-				}
+	noParams := []string{
+		CmdReadKey, CmdReadBulk, CmdReadPrefix, CmdWriteKey,
+		CmdSubscribeKey, CmdSubscribePrefix, CmdUnsubscribeKey, CmdUnsubscribePrefix,
+	}
+	for _, cmd := range noParams {
+		t.Run(cmd+" with wrong key", func(t *testing.T) {
+			req, chn := client1.MakeRequest(cmd, map[string]interface{}{
+				"@dingus": "bogus",
 			})
-		}
+			hub.incoming <- req
+			resp := mustFail(t, waitReply(t, chn))
+			// Check that reply is correct (empty)
+			if resp.Error != ErrMissingParam {
+				t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrMissingParam, resp.Error)
+			}
+		})
+	}
 
-		wrongType := map[string]map[string]interface{}{
-			CmdReadKey:           {"key": 1234},
-			CmdReadBulk:          {"keys": 1234},
-			CmdReadPrefix:        {"prefix": 1234},
-			CmdWriteKey:          {"key": 1234, "data": 1234},
-			CmdWriteBulk:         {"test": 1234},
-			CmdSubscribeKey:      {"key": 1234},
-			CmdSubscribePrefix:   {"prefix": 1234},
-			CmdUnsubscribeKey:    {"key": 1234},
-			CmdUnsubscribePrefix: {"prefix": 1234},
-		}
-		for cmd, data := range wrongType {
-			t.Run(cmd+" with invalid key type", func(t *testing.T) {
-				t.Parallel()
-				req, chn := client1.MakeRequest(cmd, data)
-				hub.incoming <- req
-				resp := mustFail(t, waitReply(t, chn))
-				// Check that reply is correct (empty)
-				if resp.Error != ErrMissingParam {
-					t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrMissingParam, resp.Error)
-				}
-			})
+	wrongType := map[string]map[string]interface{}{
+		CmdReadKey:           {"key": 1234},
+		CmdReadBulk:          {"keys": 1234},
+		CmdReadPrefix:        {"prefix": 1234},
+		CmdWriteKey:          {"key": 1234, "data": 1234},
+		CmdSubscribeKey:      {"key": 1234},
+		CmdSubscribePrefix:   {"prefix": 1234},
+		CmdUnsubscribeKey:    {"key": 1234},
+		CmdUnsubscribePrefix: {"prefix": 1234},
+	}
+	for cmd, data := range wrongType {
+		t.Run(cmd+" with invalid key type", func(t *testing.T) {
+			req, chn := client1.MakeRequest(cmd, data)
+			hub.incoming <- req
+			resp := mustFail(t, waitReply(t, chn))
+			// Check that reply is correct (empty)
+			if resp.Error != ErrMissingParam {
+				t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrMissingParam, resp.Error)
+			}
+		})
+	}
+
+	// kset-bulk is special, returns InvalidFmt on wrong format
+	t.Run(CmdWriteBulk+" with invalid key type", func(t *testing.T) {
+		req, chn := client1.MakeRequest(CmdWriteBulk, map[string]interface{}{"test": 1234})
+		hub.incoming <- req
+		resp := mustFail(t, waitReply(t, chn))
+		// Check that reply is correct (empty)
+		if resp.Error != ErrInvalidFmt {
+			t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrInvalidFmt, resp.Error)
 		}
 	})
 }
