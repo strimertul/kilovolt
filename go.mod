@@ -1,4 +1,4 @@
-module github.com/strimertul/kilovolt/v3
+module github.com/strimertul/kilovolt/v4
 
 go 1.16
 
