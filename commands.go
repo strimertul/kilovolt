@@ -92,7 +92,7 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 
 	out := make(map[string]string)
 	err := h.db.View(func(tx *badger.Txn) error {
-		for _, key := range realKeys {
+		for index, key := range realKeys {
 			val, err := tx.Get([]byte(key))
 			if err != nil {
 				if err == badger.ErrKeyNotFound {
@@ -105,7 +105,7 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 			if err != nil {
 				return err
 			}
-			out[key] = string(byt)
+			out[keys[index].(string)] = string(byt)
 		}
 		return nil
 	})
@@ -148,7 +148,7 @@ func cmdReadPrefix(h *Hub, client Client, msg Request) {
 				return err
 			}
 			key := string(item.Key())
-			out[realPrefix+key[len(realPrefix):]] = string(byt)
+			out[prefix+key[len(realPrefix):]] = string(byt)
 		}
 		return nil
 	})

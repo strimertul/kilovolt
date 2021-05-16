@@ -38,7 +38,7 @@ func TestCommands(t *testing.T) {
 		}
 	})
 
-	t.Run("kset-bulk / kget-bulk", func(t *testing.T) {
+	t.Run("kset-bulk", func(t *testing.T) {
 		req, chn := client1.MakeRequest(CmdWriteBulk, map[string]interface{}{
 			"key1": "value1",
 			"key2": "value2",
@@ -57,6 +57,61 @@ func TestCommands(t *testing.T) {
 		values := resp.Data.(map[string]interface{})
 		if values["key1"].(string) != "value1" || values["key2"].(string) != "value2" {
 			t.Fatal("response values are different from what expected", values)
+		}
+	})
+
+	t.Run("kget-all", func(t *testing.T) {
+		req, chn := client1.MakeRequest(CmdReadPrefix, map[string]interface{}{
+			"prefix": "key",
+		})
+		hub.incoming <- req
+		resp := mustSucceed(t, waitReply(t, chn))
+		// Check that reply is correct
+		values := resp.Data.(map[string]interface{})
+		if values["key1"].(string) != "value1" || values["key2"].(string) != "value2" {
+			t.Fatal("response values are different from what expected", values)
+		}
+	})
+
+	t.Run("kget inexistant", func(t *testing.T) {
+		req, chn := client1.MakeRequest(CmdReadKey, map[string]interface{}{
+			"key": "__ this key doesn't exist I swear __",
+		})
+		hub.incoming <- req
+		resp := mustSucceed(t, waitReply(t, chn))
+		// Check that reply is correct (empty)
+		if resp.Data.(string) != "" {
+			t.Fatalf("response value for kget expected to be empty, got \"%v\"", resp.Data)
+		}
+	})
+
+	//
+	// Error conditions
+	//
+
+	// Missing parameters
+
+	t.Run("kget with wrong key", func(t *testing.T) {
+		req, chn := client1.MakeRequest(CmdReadKey, map[string]interface{}{
+			"kyy": "something",
+		})
+		hub.incoming <- req
+		resp := mustFail(t, waitReply(t, chn))
+		// Check that reply is correct (empty)
+		if resp.Error != ErrMissingParam {
+			t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrMissingParam, resp.Error)
+		}
+	})
+
+	t.Run("kget with wrong type", func(t *testing.T) {
+		req, chn := client1.MakeRequest(CmdReadKey, map[string]interface{}{
+			"key": 1234,
+		})
+		hub.incoming <- req
+		resp := mustFail(t, waitReply(t, chn))
+		// Check that reply is correct (empty)
+		if resp.Error != ErrMissingParam {
+			t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrMissingParam, resp.Error)
 		}
 	})
 }

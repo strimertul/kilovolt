@@ -29,6 +29,12 @@ func newMockClient() *mockClient {
 		pending:   make(map[string]chan interface{}),
 		pushes:    make(chan Push, 10),
 		responses: make(chan Response, 10),
+		options: ClientOptions{
+			RemapKeyFn: func(str string) string {
+				// Just make sure this runs
+				return "@test/" + str
+			},
+		},
 	}
 }
 
