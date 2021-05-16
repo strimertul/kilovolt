@@ -47,7 +47,7 @@ func dbSubscribeToPrefix(db *badger.DB, client Client, prefix string) error {
 	return db.Update(func(tx *badger.Txn) error {
 		// Get subscribers for key
 		var keylist []int64
-		fullkey := []byte(subscriptionKeyDBPrefix + prefix)
+		fullkey := []byte(subscriptionPrefixDBPrefix + prefix)
 		keylist, err := txGetSubscriberList(tx, fullkey)
 		if err != nil {
 			return err
@@ -62,7 +62,7 @@ func dbSubscribeToPrefix(db *badger.DB, client Client, prefix string) error {
 func dbUnsubscribeFromPrefix(db *badger.DB, client Client, prefix string) error {
 	// Prepare key and UID
 	uid := client.UID()
-	fullkey := []byte(subscriptionKeyDBPrefix + prefix)
+	fullkey := []byte(subscriptionPrefixDBPrefix + prefix)
 
 	return db.Update(func(tx *badger.Txn) error {
 		// Remove subscription from client's own list

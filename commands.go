@@ -31,11 +31,8 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 	}
 
 	// Remap key if necessary
-	realKey := key
 	options := client.Options()
-	if options.RemapKeyFn != nil {
-		realKey = options.RemapKeyFn(realKey)
-	}
+	realKey := options.Namespace + key
 
 	err := h.db.View(func(tx *badger.Txn) error {
 		val, err := tx.Get([]byte(realKey))
@@ -84,10 +81,9 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 			sendErr(client, ErrMissingParam, "invalid entry in 'keys' parameter", msg.RequestID)
 			return
 		}
+		// Remap key if necessary
 		options := client.Options()
-		if options.RemapKeyFn != nil {
-			realKeys[index] = options.RemapKeyFn(realKeys[index])
-		}
+		realKeys[index] = options.Namespace + realKeys[index]
 	}
 
 	out := make(map[string]string)
@@ -129,11 +125,8 @@ func cmdReadPrefix(h *Hub, client Client, msg Request) {
 	}
 
 	// Remap key if necessary
-	realPrefix := prefix
 	options := client.Options()
-	if options.RemapKeyFn != nil {
-		realPrefix = options.RemapKeyFn(realPrefix)
-	}
+	realPrefix := options.Namespace + prefix
 
 	out := make(map[string]string)
 	err := h.db.View(func(tx *badger.Txn) error {
@@ -177,11 +170,8 @@ func cmdWriteKey(h *Hub, client Client, msg Request) {
 	}
 
 	// Remap key if necessary
-	realKey := key
 	options := client.Options()
-	if options.RemapKeyFn != nil {
-		realKey = options.RemapKeyFn(realKey)
-	}
+	realKey := options.Namespace + key
 
 	err := h.db.Update(func(tx *badger.Txn) error {
 		return tx.Set([]byte(realKey), []byte(data))
@@ -208,11 +198,9 @@ func cmdWriteBulk(h *Hub, client Client, msg Request) {
 			sendErr(client, ErrInvalidFmt, fmt.Sprintf("invalid value for key \"%s\"", k), msg.RequestID)
 			return
 		}
-		// Remap keys if necessary
+		// Remap key if necessary
 		options := client.Options()
-		if options.RemapKeyFn != nil {
-			k = options.RemapKeyFn(k)
-		}
+		k = options.Namespace + k
 		kvs[k] = strval
 	}
 
@@ -246,11 +234,8 @@ func cmdSubscribeKey(h *Hub, client Client, msg Request) {
 	}
 
 	// Remap key if necessary
-	realKey := key
 	options := client.Options()
-	if options.RemapKeyFn != nil {
-		realKey = options.RemapKeyFn(realKey)
-	}
+	realKey := options.Namespace + key
 
 	if err := dbSubscribeToKey(h.memdb, client, realKey); err != nil {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
@@ -273,11 +258,8 @@ func cmdSubscribePrefix(h *Hub, client Client, msg Request) {
 	}
 
 	// Remap key if necessary
-	realPrefix := prefix
 	options := client.Options()
-	if options.RemapKeyFn != nil {
-		realPrefix = options.RemapKeyFn(realPrefix)
-	}
+	realPrefix := options.Namespace + prefix
 
 	if err := dbSubscribeToPrefix(h.memdb, client, realPrefix); err != nil {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
@@ -300,11 +282,8 @@ func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
 	}
 
 	// Remap key if necessary
-	realKey := key
 	options := client.Options()
-	if options.RemapKeyFn != nil {
-		realKey = options.RemapKeyFn(realKey)
-	}
+	realKey := options.Namespace + key
 
 	if err := dbUnsubscribeFromKey(h.memdb, client, realKey); err != nil {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
@@ -328,11 +307,8 @@ func cmdUnsubscribePrefix(h *Hub, client Client, msg Request) {
 	}
 
 	// Remap key if necessary
-	realPrefix := prefix
 	options := client.Options()
-	if options.RemapKeyFn != nil {
-		realPrefix = options.RemapKeyFn(realPrefix)
-	}
+	realPrefix := options.Namespace + prefix
 
 	// Add to prefix subscriber map
 	if err := dbUnsubscribeFromPrefix(h.memdb, client, realPrefix); err != nil {

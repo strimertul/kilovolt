@@ -30,13 +30,10 @@ func newMockClient() *mockClient {
 		uid:       0,
 		send:      make(chan []byte),
 		pending:   make(map[string]chan interface{}),
-		pushes:    make(chan Push, 10),
-		responses: make(chan Response, 10),
+		pushes:    make(chan Push, 100),
+		responses: make(chan Response, 100),
 		options: ClientOptions{
-			RemapKeyFn: func(str string) string {
-				// Just make sure this runs
-				return "@test/" + str
-			},
+			Namespace: "@test/",
 		},
 		mu: sync.Mutex{},
 	}

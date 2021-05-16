@@ -63,8 +63,8 @@ type WebsocketClient struct {
 
 // ClientOptions is a list of tweakable options for clients
 type ClientOptions struct {
-	// RemapKeyFn is a optional function for remapping keys so they can be namespaced properly
-	RemapKeyFn func(key string) string
+	// Adds a prefix to all key operations to restrict them to a namespace
+	Namespace string
 }
 
 // readPump pumps messages from the websocket connection to the hub.

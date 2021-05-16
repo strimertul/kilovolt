@@ -73,10 +73,11 @@ func (h *Hub) update(kvs *pb.KVList) error {
 		}
 
 		// Notify subscribers
-		submsg, _ := json.Marshal(Push{"push", string(kv.Key), string(kv.Value)})
 		for _, clientid := range subscribers {
 			client, ok := h.clients.GetByID(clientid)
 			if ok {
+				options := client.Options()
+				submsg, _ := json.Marshal(Push{"push", string(kv.Key[len(options.Namespace):]), string(kv.Value)})
 				client.SendMessage(submsg)
 			}
 		}
