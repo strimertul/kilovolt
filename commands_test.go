@@ -124,7 +124,7 @@ func TestCommands(t *testing.T) {
 			CmdUnsubscribePrefix: {"prefix": 1234},
 		}
 		for cmd, data := range wrongType {
-			t.Run(cmd+" with wrong key", func(t *testing.T) {
+			t.Run(cmd+" with invalid key type", func(t *testing.T) {
 				t.Parallel()
 				req, chn := client1.MakeRequest(cmd, data)
 				hub.incoming <- req
