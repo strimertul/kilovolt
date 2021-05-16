@@ -48,6 +48,7 @@ func (m *mockClient) Run() {
 		jsoniter.ConfigFastest.Unmarshal(data, &response)
 		// Check message
 		if response.RequestID != "" {
+			m.mu.Lock()
 			// Get related channel
 			chn, ok := m.pending[response.RequestID]
 			if !ok {
@@ -62,7 +63,9 @@ func (m *mockClient) Run() {
 					jsoniter.ConfigFastest.Unmarshal(data, &err)
 					chn <- err
 				}
+				delete(m.pending, response.RequestID)
 			}
+			m.mu.Unlock()
 		} else {
 			// Might be a push
 			switch response.CmdType {
