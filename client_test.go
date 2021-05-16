@@ -3,6 +3,7 @@ package kv
 import (
 	"math/rand"
 	"strconv"
+	"sync"
 	_ "testing"
 
 	jsoniter "github.com/json-iterator/go"
@@ -20,6 +21,8 @@ type mockClient struct {
 	responses chan Response
 
 	options ClientOptions
+
+	mu sync.Mutex
 }
 
 func newMockClient() *mockClient {
@@ -35,6 +38,7 @@ func newMockClient() *mockClient {
 				return "@test/" + str
 			},
 		},
+		mu: sync.Mutex{},
 	}
 }
 
@@ -73,6 +77,8 @@ func (m *mockClient) Run() {
 }
 
 func (c *mockClient) MakeRequest(cmd string, data map[string]interface{}) (rawMessage, <-chan interface{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	var requestID string
 	for {
 		// Generate Unique ID
