@@ -7,6 +7,7 @@ import (
 	_ "testing"
 
 	jsoniter "github.com/json-iterator/go"
+	"github.com/sirupsen/logrus"
 )
 
 type mockClient struct {
@@ -20,18 +21,20 @@ type mockClient struct {
 	pushes    chan Push
 	responses chan Response
 
+	logger  logrus.FieldLogger
 	options ClientOptions
 
 	mu sync.Mutex
 }
 
-func newMockClient() *mockClient {
+func newMockClient(log logrus.FieldLogger) *mockClient {
 	return &mockClient{
 		uid:       0,
 		send:      make(chan []byte),
 		pending:   make(map[string]chan interface{}),
 		pushes:    make(chan Push, 100),
 		responses: make(chan Response, 100),
+		logger:    log,
 		options: ClientOptions{
 			Namespace: "@test/",
 		},
@@ -41,6 +44,7 @@ func newMockClient() *mockClient {
 
 func (m *mockClient) Run() {
 	for data := range m.send {
+		m.logger.WithField("data", string(data)).Info("received from server")
 		var response Response
 		jsoniter.ConfigFastest.Unmarshal(data, &response)
 		// Check message

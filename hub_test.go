@@ -20,7 +20,7 @@ func TestHub(t *testing.T) {
 	// Run hub routines on a separate goroutine
 	go hub.Run()
 
-	client := newMockClient()
+	client := newMockClient(log)
 	t.Run("register client", func(t *testing.T) {
 		hub.register <- client
 		// Wait for hello or timeout
@@ -50,7 +50,8 @@ func TestHub(t *testing.T) {
 
 func createInMemoryHub(t *testing.T, log logrus.FieldLogger) *Hub {
 	// Open in-memory DB
-	db, err := badger.Open(badger.DefaultOptions("").WithInMemory(true))
+	options := badger.DefaultOptions("").WithInMemory(true).WithLogger(log)
+	db, err := badger.Open(options)
 	if err != nil {
 		t.Fatal("db initialization failed", err.Error())
 	}

@@ -15,7 +15,7 @@ func TestCommands(t *testing.T) {
 	defer hub.Close()
 	go hub.Run()
 
-	client := newMockClient()
+	client := newMockClient(log)
 	defer client.Close()
 	go client.Run()
 
@@ -186,7 +186,7 @@ func TestKeySubscription(t *testing.T) {
 	defer hub.Close()
 	go hub.Run()
 
-	client := newMockClient()
+	client := newMockClient(log)
 	defer client.Close()
 	go client.Run()
 
@@ -252,7 +252,7 @@ func TestPrefixSubscription(t *testing.T) {
 	defer hub.Close()
 	go hub.Run()
 
-	client := newMockClient()
+	client := newMockClient(log)
 	defer client.Close()
 	go client.Run()
 
