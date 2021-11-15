@@ -20,6 +20,7 @@ var handlers = map[string]commandHandlerFn{
 	CmdSubscribePrefix:   cmdSubscribePrefix,
 	CmdUnsubscribePrefix: cmdUnsubscribePrefix,
 	CmdProtoVersion:      cmdProtoVersion,
+	CmdListKeys:          cmdListKeys,
 }
 
 func cmdReadKey(h *Hub, client Client, msg Request) {
@@ -38,10 +39,10 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 		val, err := tx.Get([]byte(realKey))
 		if err != nil {
 			if err == badger.ErrKeyNotFound {
-				client.SendJSON(Response{"response", true, msg.RequestID, string("")})
+				client.SendJSON(Response{"response", true, msg.RequestID, ""})
 				h.logger.WithFields(logrus.Fields{
 					"client": client.UID(),
-					"key":    string(realKey),
+					"key":    realKey,
 				}).Debug("get for inexistant key")
 				return nil
 			}
@@ -54,7 +55,7 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 		client.SendJSON(Response{"response", true, msg.RequestID, string(byt)})
 		h.logger.WithFields(logrus.Fields{
 			"client": client.UID(),
-			"key":    string(realKey),
+			"key":    realKey,
 		}).Debug("get key")
 		return nil
 	})
@@ -73,6 +74,7 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 		return
 	}
 
+	options := client.Options()
 	realKeys := make([]string, len(keys))
 	for index, key := range keys {
 		// Remap key if necessary
@@ -81,8 +83,6 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 			sendErr(client, ErrMissingParam, "invalid entry in 'keys' parameter", msg.RequestID)
 			return
 		}
-		// Remap key if necessary
-		options := client.Options()
 		realKeys[index] = options.Namespace + realKeys[index]
 	}
 
@@ -185,11 +185,12 @@ func cmdWriteKey(h *Hub, client Client, msg Request) {
 
 	h.logger.WithFields(logrus.Fields{
 		"client": client.UID(),
-		"key":    string(realKey),
+		"key":    realKey,
 	}).Debug("modified key")
 }
 
 func cmdWriteBulk(h *Hub, client Client, msg Request) {
+	options := client.Options()
 	// Copy data over
 	kvs := make(map[string]string)
 	for k, v := range msg.Data {
@@ -198,10 +199,7 @@ func cmdWriteBulk(h *Hub, client Client, msg Request) {
 			sendErr(client, ErrInvalidFmt, fmt.Sprintf("invalid value for key \"%s\"", k), msg.RequestID)
 			return
 		}
-		// Remap key if necessary
-		options := client.Options()
-		k = options.Namespace + k
-		kvs[k] = strval
+		kvs[options.Namespace+k] = strval
 	}
 
 	err := h.db.Update(func(tx *badger.Txn) error {
@@ -243,7 +241,7 @@ func cmdSubscribeKey(h *Hub, client Client, msg Request) {
 	}
 	h.logger.WithFields(logrus.Fields{
 		"client": client.UID(),
-		"key":    string(realKey),
+		"key":    realKey,
 	}).Debug("subscribed to key")
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
@@ -267,7 +265,7 @@ func cmdSubscribePrefix(h *Hub, client Client, msg Request) {
 	}
 	h.logger.WithFields(logrus.Fields{
 		"client": client.UID(),
-		"prefix": string(realPrefix),
+		"prefix": realPrefix,
 	}).Debug("subscribed to prefix")
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
@@ -291,7 +289,7 @@ func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
 	}
 	h.logger.WithFields(logrus.Fields{
 		"client": client.UID(),
-		"key":    string(realKey),
+		"key":    realKey,
 	}).Debug("unsubscribed to key")
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
@@ -317,13 +315,52 @@ func cmdUnsubscribePrefix(h *Hub, client Client, msg Request) {
 	}
 	h.logger.WithFields(logrus.Fields{
 		"client": client.UID(),
-		"prefix": string(realPrefix),
+		"prefix": realPrefix,
 	}).Debug("unsubscribed from prefix")
 
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 }
 
-func cmdProtoVersion(h *Hub, client Client, msg Request) {
+func cmdProtoVersion(_ *Hub, client Client, msg Request) {
 	client.SendJSON(Response{"response", true, msg.RequestID, ProtoVersion})
+}
+
+func cmdListKeys(h *Hub, client Client, msg Request) {
+	var prefix string
+
+	// Check params
+	if prefixRaw, ok := msg.Data["prefix"]; ok {
+		prefix, _ = prefixRaw.(string)
+	}
+
+	// Remap key if necessary
+	options := client.Options()
+	realPrefix := options.Namespace + prefix
+
+	var out []string
+	err := h.db.View(func(tx *badger.Txn) error {
+		opt := badger.DefaultIteratorOptions
+		opt.Prefix = []byte(realPrefix)
+		it := tx.NewIterator(opt)
+		defer it.Close()
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			out = append(out, string(item.Key()))
+		}
+		return nil
+	})
+	if err != nil {
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
+		return
+	}
+	// If no keys are found, return empty array instead of null
+	if len(out) < 1 {
+		out = []string{}
+	}
+	h.logger.WithFields(logrus.Fields{
+		"client": client.UID(),
+		"prefix": prefix,
+	}).Debug("list keys")
+	client.SendJSON(Response{"response", true, msg.RequestID, out})
 }

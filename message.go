@@ -1,6 +1,6 @@
 package kv
 
-const ProtoVersion = "v4"
+const ProtoVersion = "v5"
 
 // Commands
 const (
@@ -14,6 +14,7 @@ const (
 	CmdSubscribePrefix   = "ksub-prefix"
 	CmdUnsubscribeKey    = "kunsub"
 	CmdUnsubscribePrefix = "kunsub-prefix"
+	CmdListKeys          = "klist"
 )
 
 type ErrCode string

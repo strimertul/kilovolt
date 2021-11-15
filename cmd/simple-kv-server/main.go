@@ -7,7 +7,7 @@ import (
 	"github.com/dgraph-io/badger/v3"
 	"github.com/sirupsen/logrus"
 
-	kv "github.com/strimertul/kilovolt/v4"
+	kv "github.com/strimertul/kilovolt/v5"
 )
 
 var log = logrus.New()

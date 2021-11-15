@@ -16,3 +16,7 @@
 
 # Kilovolt test data
 data
+
+# IDE folders
+.idea
+.vscode

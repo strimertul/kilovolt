@@ -2,7 +2,7 @@
 
 Kilovolt exposes a WebSocket server and speaks using text JSON messages.
 
-**Note:** This documentation pertains to Kilovolt protocol version `v4`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
+**Note:** This documentation pertains to Kilovolt protocol version `v5`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
 
 ## Message format
 
@@ -235,6 +235,10 @@ Response
 TODO
 
 ### `kunsub-prefix` - Unsubscribe from prefix
+
+TODO
+
+### `klist` - Get list of keys (with optional prefix)
 
 TODO
 

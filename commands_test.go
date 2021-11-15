@@ -51,6 +51,19 @@ func TestCommands(t *testing.T) {
 		mustSucceed(t, waitReply(t, chn))
 	})
 
+	t.Run("klist", func(t *testing.T) {
+		req, chn := client.MakeRequest(CmdListKeys, map[string]interface{}{
+			"prefix": "key",
+		})
+		hub.incoming <- req
+		resp := mustSucceed(t, waitReply(t, chn))
+		// Check that reply is correct (empty)
+		data := resp.Data.([]interface{})
+		if len(data) != 2 {
+			t.Fatalf("response value for klist expected to be a 2 item list, got \"%v\"", resp.Data)
+		}
+	})
+
 	t.Run("kget-bulk", func(t *testing.T) {
 		req, chn := client.MakeRequest(CmdReadBulk, map[string]interface{}{
 			"keys": []string{"key1", "key2"},
