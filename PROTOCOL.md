@@ -232,15 +232,91 @@ Response
 
 ### `ksub-prefix` - Subscribe to prefix
 
-TODO
+Subscribe to changes of any key with a given prefix and receive pushes every time someone writes to them.
+
+Required data:
+
+| Parameter | Description            |
+| --------- | ---------------------- |
+| prefix    | Prefix to subscribe to |
+
+#### Example
+
+Request
+
+```json
+{ "command": "ksub-prefix", "data": { "prefix": "key" } }
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true
+}
+```
+
+Push (later on)
+
+```json
+{ "type": "push", "key": "key-name", "new_value": "changed value" }
+```
 
 ### `kunsub-prefix` - Unsubscribe from prefix
 
-TODO
+Remove subscription to prefix changes.
+
+Required data:
+
+| Parameter | Description                |
+| --------- | -------------------------- |
+| prefix    | Prefix to unsubscribe from |
+
+#### Example
+
+Request
+
+```json
+{ "command": "kunsub-prefix", "data": { "prefix": "key" } }
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true
+}
+```
 
 ### `klist` - Get list of keys (with optional prefix)
 
-TODO
+List keys with an optional given prefix.
+
+Required data:
+
+| Parameter | Description |
+| --------- | ----------- |
+| prefix    | Key prefix  |
+
+#### Example
+
+Request
+
+```json
+{ "command": "klist", "data": { "prefix": "key" } }
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true,
+  "data": ["key1", "key2"]
+}
+```
 
 ## Error codes
 
