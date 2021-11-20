@@ -13,7 +13,7 @@ Every client request comes in this format:
 ```json
 {
 	"command": "<cmd name>",
-  "request_id": "<any string here>",
+	"request_id": "<any string here>",
 	"data": {
 		<command args here>
 	}
