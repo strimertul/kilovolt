@@ -2,7 +2,7 @@
 
 Kilovolt exposes a WebSocket server and speaks using text JSON messages.
 
-**Note:** This documentation pertains to Kilovolt protocol version `v5`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
+**Note:** This documentation pertains to Kilovolt protocol version `v6`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
 
 ## Message format
 
@@ -85,6 +85,26 @@ They follow this format:
 
 Check below for a list of all error codes.
 
+## Authentication
+
+As a websocket server, Kilovolt servers are accessible from any webpage you might visit and any process open in your computer. To protect from unauthorized access, Kilovolt supports setting an optional password and making client go through an authentication phase before any command can be called (except for informative ones like `version`).
+
+Authentication is performed in two steps:
+
+- The client sends a `klogin`, asking for authentication. The server replies with a challenge and a salt.
+- The client encodes the HMAC-SHA256 of the challenge using the password and the salt, and sends it back using the `kauth` command.
+
+Both challenge, salt and resulting hash are encoded using base64.
+
+This is what the flow should look like:
+
+```
+Client: klogin {}
+Server: response { challenge: "MC45NDU0NTU2MDk3ODI2OTU1", salt: "MTIyLjI5MzkzMzQ0MjczMDA3" }
+Client: kauth { hash: base64_encode(HMAC-SHA256(base64_decode(challenge), (password + base64_decode(salt)))) }
+Server: response { ok: true }
+```
+
 ## Supported commands
 
 ### `version` - Get Kilovolt protocol version
@@ -106,6 +126,51 @@ Response
   "type": "response",
   "ok": true,
   "data": "v4"
+}
+```
+
+### `klogin` - Generate authentication challenge
+
+Generates a challenge to authenticate clients.
+
+Request
+
+```json
+{ "command": "klogin" }
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true,
+  "data": {
+    "challenge": "z9hUVNfu1rQJw1VWGYUjrkj2KCla2pI5YKVMqqQPZ1A=",
+    "salt": "CFs4DalF5p4L0cxbhK3eQm8mFUmsqWJtY/paN/Df2ZU="
+  }
+}
+```
+
+### `kauth` - Submit authentication challenge
+
+Submits the authentication challenge to the server and authenticates the client if correct.
+
+Request
+
+```json
+{
+  "command": "kauth",
+  "data": { "hash": "NG3GPDGkR791t6SnPl0RV2Wj9msbkie3h7VmlKHY6mo=" }
+}
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true
 }
 ```
 
@@ -322,9 +387,12 @@ Response
 
 These are all the possible error codes that can be returned, make sure to check the `details` field for more information when possible!
 
-| Error code                   | Description                                                                |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| `invalid message format`     | Request received was not valid JSON                                        |
-| `required parameter missing` | One or more required parameters were not supplied in the `data` dictionary |
-| `server error`               | The underlying database returned error                                     |
-| `unknown command`            | Command in request is not supported                                        |
+| Error code                       | Description                                                                |
+| -------------------------------- | -------------------------------------------------------------------------- |
+| `invalid message format`         | Request received was not valid JSON                                        |
+| `required parameter missing`     | One or more required parameters were not supplied in the `data` dictionary |
+| `server error`                   | The underlying database returned error                                     |
+| `unknown command`                | Command in request is not supported                                        |
+| "authentication not initialized" | Trying to solve a challenge that wasn't initiated                          |
+| "authentication failed"          | Challenge is invalid                                                       |
+| "authentication required"        | Trying to use a command without having authenticated first                 |

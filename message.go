@@ -1,6 +1,6 @@
 package kv
 
-const ProtoVersion = "v5"
+const ProtoVersion = "v6"
 
 // Commands
 const (
