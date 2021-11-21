@@ -154,7 +154,7 @@ Response
 
 ### `kauth` - Submit authentication challenge
 
-Submits the authentication challenge to the server and authenticates the client if correct.
+Submits the authentication challenge to the server and authenticates the client if correct. Refer to the [Authentication section](#authentication) for more information on how to calculate the authentication challenge.
 
 Request
 
