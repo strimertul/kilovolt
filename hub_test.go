@@ -57,7 +57,7 @@ func createInMemoryHub(t *testing.T, log logrus.FieldLogger) *Hub {
 	}
 
 	// Create hub with in-mem DB
-	hub, err := NewHub(db, log)
+	hub, err := NewHub(db, HubOptions{}, log)
 	if err != nil {
 		t.Fatal("hub initialization failed", err.Error())
 	}

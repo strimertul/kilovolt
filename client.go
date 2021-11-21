@@ -34,6 +34,7 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
+// Client is a middleman between the websocket connection and the hub.
 type Client interface {
 	Options() ClientOptions
 	Close()
@@ -45,7 +46,12 @@ type Client interface {
 	UID() int64
 }
 
-// Client is a middleman between the websocket connection and the hub.
+// ClientOptions is a list of tweakable options for clients
+type ClientOptions struct {
+	// Adds a prefix to all key operations to restrict them to a namespace
+	Namespace string
+}
+
 type WebsocketClient struct {
 	hub *Hub
 
@@ -59,12 +65,6 @@ type WebsocketClient struct {
 	send chan []byte
 
 	options ClientOptions
-}
-
-// ClientOptions is a list of tweakable options for clients
-type ClientOptions struct {
-	// Adds a prefix to all key operations to restrict them to a namespace
-	Namespace string
 }
 
 // readPump pumps messages from the websocket connection to the hub.

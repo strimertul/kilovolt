@@ -15,6 +15,8 @@ const (
 	CmdUnsubscribeKey    = "kunsub"
 	CmdUnsubscribePrefix = "kunsub-prefix"
 	CmdListKeys          = "klist"
+	CmdAuthRequest       = "klogin"
+	CmdAuthChallenge     = "kauth"
 )
 
 type ErrCode string
@@ -24,6 +26,9 @@ const (
 	ErrInvalidFmt   = "invalid message format"
 	ErrMissingParam = "required parameter missing"
 	ErrUnknownCmd   = "unknown command"
+	ErrAuthNotInit  = "authentication not initialized"
+	ErrAuthFailed   = "authentication failed"
+	ErrAuthRequired = "authentication required"
 )
 
 type Request struct {

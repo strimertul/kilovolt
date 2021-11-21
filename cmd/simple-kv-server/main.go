@@ -52,7 +52,7 @@ func main() {
 	defer db.Close()
 
 	// Initialize KV (required)
-	hub, err := kv.NewHub(db, wrapLogger("kv"))
+	hub, err := kv.NewHub(db, kv.HubOptions{}, wrapLogger("kv"))
 	if err != nil {
 		panic(err)
 	}

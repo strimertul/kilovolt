@@ -1,6 +1,10 @@
 package kv
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/dgraph-io/badger/v3"
@@ -21,9 +25,13 @@ var handlers = map[string]commandHandlerFn{
 	CmdUnsubscribePrefix: cmdUnsubscribePrefix,
 	CmdProtoVersion:      cmdProtoVersion,
 	CmdListKeys:          cmdListKeys,
+	CmdAuthRequest:       cmdAuthRequest,
+	CmdAuthChallenge:     cmdAuthChallenge,
 }
 
 func cmdReadKey(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	// Check params
 	key, ok := msg.Data["key"].(string)
 	if !ok {
@@ -67,6 +75,8 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 }
 
 func cmdReadBulk(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	// Check params
 	keys, ok := msg.Data["keys"].([]interface{})
 	if !ok {
@@ -117,6 +127,8 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 }
 
 func cmdReadPrefix(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	// Check params
 	prefix, ok := msg.Data["prefix"].(string)
 	if !ok {
@@ -157,6 +169,8 @@ func cmdReadPrefix(h *Hub, client Client, msg Request) {
 }
 
 func cmdWriteKey(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	// Check params
 	key, ok := msg.Data["key"].(string)
 	if !ok {
@@ -190,6 +204,8 @@ func cmdWriteKey(h *Hub, client Client, msg Request) {
 }
 
 func cmdWriteBulk(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	options := client.Options()
 	// Copy data over
 	kvs := make(map[string]string)
@@ -224,6 +240,8 @@ func cmdWriteBulk(h *Hub, client Client, msg Request) {
 }
 
 func cmdSubscribeKey(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	// Check params
 	key, ok := msg.Data["key"].(string)
 	if !ok {
@@ -248,6 +266,8 @@ func cmdSubscribeKey(h *Hub, client Client, msg Request) {
 }
 
 func cmdSubscribePrefix(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	// Check params
 	prefix, ok := msg.Data["prefix"].(string)
 	if !ok {
@@ -272,6 +292,8 @@ func cmdSubscribePrefix(h *Hub, client Client, msg Request) {
 }
 
 func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	// Check params
 	key, ok := msg.Data["key"].(string)
 	if !ok {
@@ -297,6 +319,8 @@ func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
 }
 
 func cmdUnsubscribePrefix(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	// Check params
 	prefix, ok := msg.Data["prefix"].(string)
 	if !ok {
@@ -327,6 +351,8 @@ func cmdProtoVersion(_ *Hub, client Client, msg Request) {
 }
 
 func cmdListKeys(h *Hub, client Client, msg Request) {
+	requireAuth(h, client, msg)
+
 	var prefix string
 
 	// Check params
@@ -363,4 +389,73 @@ func cmdListKeys(h *Hub, client Client, msg Request) {
 		"prefix": prefix,
 	}).Debug("list keys")
 	client.SendJSON(Response{"response", true, msg.RequestID, out})
+}
+
+func cmdAuthRequest(h *Hub, client Client, msg Request) {
+	// Create challenge
+	challenge := authChallenge{
+		Challenge: h.randomBytes(),
+		Salt:      h.randomBytes(),
+	}
+	_ = h.clients.SetChallenge(client.UID(), challenge)
+
+	// Send challenge
+	client.SendJSON(Response{"response", true, msg.RequestID, struct {
+		Challenge string `json:"challenge"`
+		Salt      string `json:"salt"`
+	}{
+		base64.StdEncoding.EncodeToString(challenge.Challenge[:]),
+		base64.StdEncoding.EncodeToString(challenge.Salt[:]),
+	}})
+}
+
+func cmdAuthChallenge(h *Hub, client Client, msg Request) {
+	// Check params
+	challenge, ok := msg.Data["hash"].(string)
+	if !ok {
+		sendErr(client, ErrMissingParam, "invalid or missing 'challenge' parameter", msg.RequestID)
+		return
+	}
+
+	// Decode challenge
+	challengeBytes, err := base64.StdEncoding.DecodeString(challenge)
+	if err != nil {
+		sendErr(client, ErrInvalidFmt, "invalid 'challenge' parameter", msg.RequestID)
+		return
+	}
+
+	// Get UID
+	uid := client.UID()
+
+	// Generate hash
+	challengeData, err := h.clients.Challenge(uid)
+	if err != nil {
+		sendErr(client, ErrAuthNotInit, "you must start an authentication challenge first", msg.RequestID)
+		return
+	}
+	hash := hmac.New(sha256.New, append([]byte(h.options.Password), challengeData.Salt...))
+	hash.Write(challengeData.Challenge)
+	hashBytes := hash.Sum(nil)
+
+	// Check if hash matches
+	if subtle.ConstantTimeCompare(hashBytes, challengeBytes) != 1 {
+		sendErr(client, ErrAuthFailed, "authentication failed", msg.RequestID)
+		return
+	}
+
+	_ = h.clients.SetAuthenticated(uid, true)
+
+	// Send OK response
+	client.SendJSON(Response{"response", true, msg.RequestID, nil})
+}
+
+func requireAuth(h *Hub, client Client, msg Request) {
+	// Exit early if we don't have a password (no auth required)
+	if h.options.Password == "" {
+		return
+	}
+
+	if !h.clients.Authenticated(client.UID()) {
+		sendErr(client, ErrAuthRequired, "authentication required", msg.RequestID)
+	}
 }

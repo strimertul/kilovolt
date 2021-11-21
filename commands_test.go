@@ -1,6 +1,9 @@
 package kv
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -320,6 +323,62 @@ func TestPrefixSubscription(t *testing.T) {
 	}
 	if len(lst) > 0 {
 		t.Fatal("unsubscribe failed, subscription still present")
+	}
+}
+
+func TestAuthentication(t *testing.T) {
+	const password = "test"
+
+	log := logrus.New()
+	log.Level = logrus.TraceLevel
+
+	hub := createInMemoryHub(t, log)
+	hub.SetOptions(HubOptions{Password: password})
+	defer hub.Close()
+	go hub.Run()
+
+	client := newMockClient(log)
+	defer client.Close()
+	go client.Run()
+
+	hub.register <- client
+
+	// Make sure client is not authenticated
+	if hub.clients.Authenticated(client.UID()) {
+		t.Fatal("client just connected and is already considered authenticated")
+	}
+
+	// Make authentication request
+	req, chn := client.MakeRequest(CmdAuthRequest, map[string]interface{}{})
+	hub.incoming <- req
+	challenge := mustSucceed(t, waitReply(t, chn))
+	data := challenge.Data.(map[string]interface{})
+
+	// Decode challenge
+	challengeBytes, err := base64.StdEncoding.DecodeString(data["challenge"].(string))
+	if err != nil {
+		t.Fatal("failed to decode challenge", err.Error())
+	}
+	saltBytes, err := base64.StdEncoding.DecodeString(data["salt"].(string))
+	if err != nil {
+		t.Fatal("failed to decode salt", err.Error())
+	}
+
+	// Create hash from password and challenge
+	hash := hmac.New(sha256.New, append([]byte(password), saltBytes...))
+	hash.Write(challengeBytes)
+	hashBytes := hash.Sum(nil)
+
+	// Send auth challenge
+	req, chn = client.MakeRequest(CmdAuthChallenge, map[string]interface{}{
+		"hash": base64.StdEncoding.EncodeToString(hashBytes),
+	})
+	hub.incoming <- req
+	mustSucceed(t, waitReply(t, chn))
+
+	// Make sure client is authenticated now
+	if !hub.clients.Authenticated(client.UID()) {
+		t.Fatal("client just authenticated but considered not authenticated")
 	}
 }
 
