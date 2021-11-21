@@ -38,6 +38,7 @@ func main() {
 	bind := flag.String("bind", "localhost:4338", "HTTP server bind in format addr:port")
 	dbfile := flag.String("dbdir", "data", "Path to strimertul database dir")
 	loglevel := flag.String("loglevel", "info", "Logging level (debug, info, warn, error)")
+	password := flag.String("password", "", "Optional password for authentication")
 	flag.Parse()
 
 	log.SetLevel(parseLogLevel(*loglevel))
@@ -52,7 +53,7 @@ func main() {
 	defer db.Close()
 
 	// Initialize KV (required)
-	hub, err := kv.NewHub(db, kv.HubOptions{}, wrapLogger("kv"))
+	hub, err := kv.NewHub(db, kv.HubOptions{Password: *password}, wrapLogger("kv"))
 	if err != nil {
 		panic(err)
 	}
