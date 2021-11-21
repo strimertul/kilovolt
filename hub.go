@@ -56,6 +56,7 @@ func NewHub(db *badger.DB, options HubOptions, logger logrus.FieldLogger) (*Hub,
 		db:         db,
 		memdb:      inmemdb,
 		logger:     logger,
+		options:    options,
 	}
 
 	go func() {

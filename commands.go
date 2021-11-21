@@ -30,7 +30,9 @@ var handlers = map[string]commandHandlerFn{
 }
 
 func cmdReadKey(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	// Check params
 	key, ok := msg.Data["key"].(string)
@@ -75,7 +77,9 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 }
 
 func cmdReadBulk(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	// Check params
 	keys, ok := msg.Data["keys"].([]interface{})
@@ -127,7 +131,9 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 }
 
 func cmdReadPrefix(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	// Check params
 	prefix, ok := msg.Data["prefix"].(string)
@@ -169,7 +175,9 @@ func cmdReadPrefix(h *Hub, client Client, msg Request) {
 }
 
 func cmdWriteKey(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	// Check params
 	key, ok := msg.Data["key"].(string)
@@ -204,7 +212,9 @@ func cmdWriteKey(h *Hub, client Client, msg Request) {
 }
 
 func cmdWriteBulk(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	options := client.Options()
 	// Copy data over
@@ -240,7 +250,9 @@ func cmdWriteBulk(h *Hub, client Client, msg Request) {
 }
 
 func cmdSubscribeKey(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	// Check params
 	key, ok := msg.Data["key"].(string)
@@ -266,7 +278,9 @@ func cmdSubscribeKey(h *Hub, client Client, msg Request) {
 }
 
 func cmdSubscribePrefix(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	// Check params
 	prefix, ok := msg.Data["prefix"].(string)
@@ -292,7 +306,9 @@ func cmdSubscribePrefix(h *Hub, client Client, msg Request) {
 }
 
 func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	// Check params
 	key, ok := msg.Data["key"].(string)
@@ -319,7 +335,9 @@ func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
 }
 
 func cmdUnsubscribePrefix(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	// Check params
 	prefix, ok := msg.Data["prefix"].(string)
@@ -351,7 +369,9 @@ func cmdProtoVersion(_ *Hub, client Client, msg Request) {
 }
 
 func cmdListKeys(h *Hub, client Client, msg Request) {
-	requireAuth(h, client, msg)
+	if !requireAuth(h, client, msg) {
+		return
+	}
 
 	var prefix string
 
@@ -449,13 +469,16 @@ func cmdAuthChallenge(h *Hub, client Client, msg Request) {
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 }
 
-func requireAuth(h *Hub, client Client, msg Request) {
+func requireAuth(h *Hub, client Client, msg Request) bool {
 	// Exit early if we don't have a password (no auth required)
 	if h.options.Password == "" {
-		return
+		return true
 	}
 
 	if !h.clients.Authenticated(client.UID()) {
 		sendErr(client, ErrAuthRequired, "authentication required", msg.RequestID)
+		return false
 	}
+
+	return true
 }
