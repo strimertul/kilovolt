@@ -156,7 +156,9 @@ func (c *WebsocketClient) SendJSON(data interface{}) {
 }
 
 func (c *WebsocketClient) SendMessage(data []byte) {
-	c.send <- data
+	if c.send != nil {
+		c.send <- data
+	}
 }
 
 func (c *WebsocketClient) Options() ClientOptions {
@@ -165,6 +167,7 @@ func (c *WebsocketClient) Options() ClientOptions {
 
 func (c *WebsocketClient) Close() {
 	close(c.send)
+	c.send = nil
 }
 
 // ServeWs is the legacy handler for WS
