@@ -60,7 +60,7 @@ func NewHub(db *badger.DB, options HubOptions, logger logrus.FieldLogger) (*Hub,
 	}
 
 	go func() {
-		err := db.Subscribe(context.Background(), hub.update, []pb.Match{})
+		err := db.Subscribe(context.Background(), hub.update, []pb.Match{{Prefix: []byte{}}})
 		if err != nil {
 			logger.WithError(err).Error("db subscription halted because of error")
 		}
