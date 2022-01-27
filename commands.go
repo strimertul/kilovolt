@@ -7,9 +7,9 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"go.uber.org/zap"
+	"github.com/strimertul/kilovolt/v7/drivers"
 
-	"github.com/dgraph-io/badger/v3"
+	"go.uber.org/zap"
 )
 
 type commandHandlerFn func(*Hub, Client, Request)
@@ -46,29 +46,19 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 	options := client.Options()
 	realKey := options.Namespace + key
 
-	err := h.db.View(func(tx *badger.Txn) error {
-		val, err := tx.Get([]byte(realKey))
-		if err != nil {
-			if err == badger.ErrKeyNotFound {
-				client.SendJSON(Response{"response", true, msg.RequestID, ""})
-				h.logger.Debug("get for inexistant key", zap.Int64("client", client.UID()), zap.String("key", realKey))
-				return nil
-			}
-			return err
-		}
-		byt, err := val.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-		client.SendJSON(Response{"response", true, msg.RequestID, string(byt)})
-		h.logger.Debug("get key", zap.Int64("client", client.UID()), zap.String("key", realKey))
-		return nil
-	})
-
+	data, err := h.db.Get(realKey)
 	if err != nil {
-		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
-		return
+		if err == drivers.ErrorKeyNotFound {
+			client.SendJSON(Response{"response", true, msg.RequestID, ""})
+			h.logger.Debug("get for non-existent key", zap.Int64("client", client.UID()), zap.String("key", realKey))
+			return
+		} else {
+			sendErr(client, ErrServerError, err.Error(), msg.RequestID)
+			return
+		}
 	}
+	client.SendJSON(Response{"response", true, msg.RequestID, data})
+	h.logger.Debug("get key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 }
 
 func cmdReadBulk(h *Hub, client Client, msg Request) {
@@ -95,29 +85,18 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 		realKeys[index] = options.Namespace + realKeys[index]
 	}
 
-	out := make(map[string]string)
-	err := h.db.View(func(tx *badger.Txn) error {
-		for index, key := range realKeys {
-			val, err := tx.Get([]byte(key))
-			if err != nil {
-				if err == badger.ErrKeyNotFound {
-					out[key] = ""
-					continue
-				}
-				return err
-			}
-			byt, err := val.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			out[keys[index].(string)] = string(byt)
-		}
-		return nil
-	})
+	results, err := h.db.GetBulk(realKeys)
 	if err != nil {
 		sendErr(client, ErrServerError, "server error: "+err.Error(), msg.RequestID)
 		return
 	}
+
+	// Remap keys if necessary
+	out := make(map[string]string)
+	for key, value := range results {
+		out[key[len(options.Namespace):]] = value
+	}
+
 	h.logger.Debug("get multi key", zap.Int64("client", client.UID()), zap.Strings("keys", realKeys))
 	client.SendJSON(Response{"response", true, msg.RequestID, out})
 }
@@ -138,27 +117,18 @@ func cmdReadPrefix(h *Hub, client Client, msg Request) {
 	options := client.Options()
 	realPrefix := options.Namespace + prefix
 
-	out := make(map[string]string)
-	err := h.db.View(func(tx *badger.Txn) error {
-		opt := badger.DefaultIteratorOptions
-		opt.Prefix = []byte(realPrefix)
-		it := tx.NewIterator(opt)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			item := it.Item()
-			byt, err := item.ValueCopy(nil)
-			if err != nil {
-				return err
-			}
-			key := string(item.Key())
-			out[prefix+key[len(realPrefix):]] = string(byt)
-		}
-		return nil
-	})
+	results, err := h.db.GetPrefix(realPrefix)
 	if err != nil {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
+
+	// Remap keys if necessary
+	out := make(map[string]string)
+	for key, value := range results {
+		out[key[len(options.Namespace):]] = value
+	}
+
 	h.logger.Debug("get all (prefix)", zap.Int64("client", client.UID()), zap.String("prefix", prefix))
 	client.SendJSON(Response{"response", true, msg.RequestID, out})
 }
@@ -184,9 +154,7 @@ func cmdWriteKey(h *Hub, client Client, msg Request) {
 	options := client.Options()
 	realKey := options.Namespace + key
 
-	err := h.db.Update(func(tx *badger.Txn) error {
-		return tx.Set([]byte(realKey), []byte(data))
-	})
+	err := h.db.Set(realKey, data)
 	if err != nil {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
@@ -194,6 +162,7 @@ func cmdWriteKey(h *Hub, client Client, msg Request) {
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 
+	h.subscriptions.KeyChanged(realKey, data)
 	h.logger.Debug("modified key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 }
 
@@ -214,15 +183,7 @@ func cmdWriteBulk(h *Hub, client Client, msg Request) {
 		kvs[options.Namespace+k] = strval
 	}
 
-	err := h.db.Update(func(tx *badger.Txn) error {
-		for k, v := range kvs {
-			err := tx.Set([]byte(k), []byte(v))
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	err := h.db.SetBulk(kvs)
 	if err != nil {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
@@ -230,6 +191,9 @@ func cmdWriteBulk(h *Hub, client Client, msg Request) {
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 
+	for k, v := range kvs {
+		h.subscriptions.KeyChanged(k, v)
+	}
 	h.logger.Debug("bulk modify keys", zap.Int64("client", client.UID()))
 }
 
@@ -249,10 +213,7 @@ func cmdSubscribeKey(h *Hub, client Client, msg Request) {
 	options := client.Options()
 	realKey := options.Namespace + key
 
-	if err := dbSubscribeToKey(h.memdb, client, realKey); err != nil {
-		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
-		return
-	}
+	h.subscriptions.SubscribeKey(client.UID(), realKey)
 	h.logger.Debug("subscribed to key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
@@ -274,10 +235,7 @@ func cmdSubscribePrefix(h *Hub, client Client, msg Request) {
 	options := client.Options()
 	realPrefix := options.Namespace + prefix
 
-	if err := dbSubscribeToPrefix(h.memdb, client, realPrefix); err != nil {
-		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
-		return
-	}
+	h.subscriptions.SubscribePrefix(client.UID(), realPrefix)
 	h.logger.Debug("subscribed to prefix", zap.Int64("client", client.UID()), zap.String("prefix", realPrefix))
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
@@ -299,10 +257,7 @@ func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
 	options := client.Options()
 	realKey := options.Namespace + key
 
-	if err := dbUnsubscribeFromKey(h.memdb, client, realKey); err != nil {
-		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
-		return
-	}
+	h.subscriptions.UnsubscribeKey(client.UID(), realKey)
 	h.logger.Debug("unsubscribed to key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
@@ -326,10 +281,7 @@ func cmdUnsubscribePrefix(h *Hub, client Client, msg Request) {
 	realPrefix := options.Namespace + prefix
 
 	// Add to prefix subscriber map
-	if err := dbUnsubscribeFromPrefix(h.memdb, client, realPrefix); err != nil {
-		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
-		return
-	}
+	h.subscriptions.UnsubscribePrefix(client.UID(), realPrefix)
 	h.logger.Debug("unsubscribed from prefix", zap.Int64("client", client.UID()), zap.String("prefix", realPrefix))
 
 	// Send OK response
@@ -356,18 +308,7 @@ func cmdListKeys(h *Hub, client Client, msg Request) {
 	options := client.Options()
 	realPrefix := options.Namespace + prefix
 
-	var out []string
-	err := h.db.View(func(tx *badger.Txn) error {
-		opt := badger.DefaultIteratorOptions
-		opt.Prefix = []byte(realPrefix)
-		it := tx.NewIterator(opt)
-		defer it.Close()
-		for it.Rewind(); it.Valid(); it.Next() {
-			item := it.Item()
-			out = append(out, string(item.Key()))
-		}
-		return nil
-	})
+	out, err := h.db.List(realPrefix)
 	if err != nil {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return

@@ -24,7 +24,8 @@ type mockClient struct {
 	logger  *zap.Logger
 	options ClientOptions
 
-	mu sync.Mutex
+	mu    sync.Mutex
+	ready chan bool
 }
 
 func newMockClient(log *zap.Logger) *mockClient {
@@ -38,7 +39,8 @@ func newMockClient(log *zap.Logger) *mockClient {
 		options: ClientOptions{
 			Namespace: "@test/",
 		},
-		mu: sync.Mutex{},
+		mu:    sync.Mutex{},
+		ready: make(chan bool),
 	}
 }
 
@@ -74,10 +76,15 @@ func (m *mockClient) Run() {
 				var push Push
 				jsoniter.ConfigFastest.Unmarshal(data, &push)
 				m.pushes <- push
+			case "hello":
+				m.ready <- true
 			}
 		}
-
 	}
+}
+
+func (c *mockClient) Wait() {
+	<-c.ready
 }
 
 func (c *mockClient) MakeRequest(cmd string, data map[string]interface{}) (rawMessage, <-chan interface{}) {
@@ -112,19 +119,11 @@ func (c *mockClient) UID() int64 {
 
 func (c *mockClient) SendJSON(data interface{}) {
 	msg, _ := json.Marshal(data)
-	if c.send != nil {
-		c.send <- msg
-	} else {
-		c.logger.Warn("send message called on closed client")
-	}
+	c.send <- msg
 }
 
 func (c *mockClient) SendMessage(data []byte) {
-	if c.send != nil {
-		c.send <- data
-	} else {
-		c.logger.Warn("send message called on closed client")
-	}
+	c.send <- data
 }
 
 func (c *mockClient) Options() ClientOptions {

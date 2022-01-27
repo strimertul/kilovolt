@@ -1,15 +1,15 @@
 package kv
 
 import (
-	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	mrand "math/rand"
 
+	"github.com/strimertul/kilovolt/v7/drivers"
+
 	"go.uber.org/zap"
 
-	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/pb"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -24,56 +24,45 @@ type HubOptions struct {
 }
 
 type Hub struct {
-	options    HubOptions
-	clients    *clientList
-	incoming   chan rawMessage
-	register   chan Client
-	unregister chan Client
+	options       HubOptions
+	clients       *clientList
+	incoming      chan rawMessage
+	register      chan Client
+	unregister    chan Client
+	subscriptions *SubscriptionManager
 
-	db    *badger.DB
-	memdb *badger.DB
+	db drivers.Backend
 
 	logger *zap.Logger
 }
 
 var json = jsoniter.ConfigDefault
 
-func NewHub(db *badger.DB, options HubOptions, logger *zap.Logger) (*Hub, error) {
+func NewHub(db drivers.Backend, options HubOptions, logger *zap.Logger) (*Hub, error) {
 	if logger == nil {
 		logger, _ = zap.NewProduction()
 	}
 
-	// Create temporary DB for subscriptions
-	inmemdb, err := badger.Open(badger.DefaultOptions("").WithInMemory(true))
-	if err != nil {
-		return nil, err
-	}
+	clients := newClientList()
+	subscriptions := makeSubscriptionManager()
 
 	hub := &Hub{
-		incoming:   make(chan rawMessage, 10),
-		register:   make(chan Client, 10),
-		unregister: make(chan Client, 10),
-		clients:    newClientList(),
-		db:         db,
-		memdb:      inmemdb,
-		logger:     logger,
-		options:    options,
+		incoming:      make(chan rawMessage, 10),
+		register:      make(chan Client, 10),
+		unregister:    make(chan Client, 10),
+		clients:       clients,
+		db:            db,
+		logger:        logger,
+		options:       options,
+		subscriptions: subscriptions,
 	}
 
-	go func() {
-		err := db.Subscribe(context.Background(), hub.update, []pb.Match{{
-			Prefix: []byte{},
-		}})
-		if err != nil {
-			logger.Error("db subscription halted because of error", zap.Error(err))
-		}
-	}()
+	subscriptions.hub = hub
 
 	return hub, nil
 }
 
 func (hub *Hub) Close() {
-	hub.memdb.Close()
 }
 
 func (hub *Hub) SetOptions(options HubOptions) {
@@ -83,10 +72,7 @@ func (hub *Hub) SetOptions(options HubOptions) {
 func (hub *Hub) update(kvs *pb.KVList) error {
 	for _, kv := range kvs.Kv {
 		// Get subscribers
-		subscribers, err := dbGetSubscribersForKey(hub.memdb, kv.Key)
-		if err != nil {
-			return err
-		}
+		subscribers := hub.subscriptions.GetSubscribers(string(kv.Key))
 
 		// Notify subscribers
 		for _, clientid := range subscribers {
@@ -151,9 +137,7 @@ func (hub *Hub) Run() {
 
 		case client := <-hub.unregister:
 			// Unsubscribe from all keys
-			if err := dbUnsubscribeFromAll(hub.memdb, client); err != nil {
-				hub.logger.Error("error removing subscriptions for client", zap.Error(err), zap.Int64("client-id", client.UID()))
-			}
+			hub.subscriptions.UnsubscribeAll(client.UID())
 
 			// Delete entry and close channel
 			hub.clients.RemoveClient(client)

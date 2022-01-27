@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/strimertul/kilovolt/v7/drivers/mapkv"
 
-	"github.com/dgraph-io/badger/v3"
+	"go.uber.org/zap"
 )
 
 func TestHub(t *testing.T) {
@@ -49,15 +49,8 @@ func TestHub(t *testing.T) {
 }
 
 func createInMemoryHub(t *testing.T, log *zap.Logger) *Hub {
-	// Open in-memory DB
-	options := badger.DefaultOptions("").WithInMemory(true)
-	db, err := badger.Open(options)
-	if err != nil {
-		t.Fatal("db initialization failed", err.Error())
-	}
-
 	// Create hub with in-mem DB
-	hub, err := NewHub(db, HubOptions{}, log)
+	hub, err := NewHub(mapkv.MakeBackend(), HubOptions{}, log)
 	if err != nil {
 		t.Fatal("hub initialization failed", err.Error())
 	}

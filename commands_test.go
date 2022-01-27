@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/badger/v3"
+	"github.com/strimertul/kilovolt/v7/drivers"
 
 	"go.uber.org/zap"
 )
@@ -23,41 +23,29 @@ func makeHubClient(t *testing.T, test func(hub *Hub, client *mockClient)) {
 	go client.Run()
 
 	hub.register <- client
+	client.Wait()
 
 	test(hub, client)
 }
 
 func prepareKey(t *testing.T, hub *Hub, key string, expected string) {
-	err := hub.db.Update(func(txn *badger.Txn) error {
-		return txn.Set([]byte("@test/"+key), []byte(expected))
-	})
+	err := hub.db.Set("@test/"+key, expected)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func assertKey(t *testing.T, hub *Hub, key string, expected string) {
-	err := hub.db.View(func(txn *badger.Txn) error {
-		val, err := txn.Get([]byte("@test/" + key))
-		if err != nil {
-			if err == badger.ErrKeyNotFound {
-				t.Errorf("Key '%s' not found", key)
-			} else {
-				t.Errorf("Error getting key '%s': %s", key, err)
-			}
-			return nil
-		}
-		byt, err := val.ValueCopy(nil)
-		if err != nil {
-			return err
-		}
-		if string(byt) != expected {
-			t.Errorf("Expected '%s', got '%s'", expected, string(byt))
-		}
-		return nil
-	})
+	val, err := hub.db.Get("@test/" + key)
 	if err != nil {
-		t.Fatal(err)
+		if err == drivers.ErrorKeyNotFound {
+			t.Errorf("Key '%s' not found", key)
+		} else {
+			t.Errorf("Error getting key '%s': %s", key, err)
+		}
+	}
+	if val != expected {
+		t.Errorf("Expected '%s', got '%s'", expected, val)
 	}
 }
 
@@ -237,10 +225,7 @@ func TestKeySubscription(t *testing.T) {
 
 		// Check that subscription is in database
 		prefixedKey := client.options.Namespace + "sub-test"
-		lst, err := dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
-		if err != nil {
-			t.Fatal("db error", err.Error())
-		}
+		lst := hub.subscriptions.GetSubscribers(prefixedKey)
 		if len(lst) < 1 {
 			t.Fatal("subscribe failed, subscription not present")
 		}
@@ -271,10 +256,7 @@ func TestKeySubscription(t *testing.T) {
 		mustSucceed(t, waitReply(t, chn))
 
 		// Check that subscription is not in database anymore
-		lst, err = dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
-		if err != nil {
-			t.Fatal("db error", err.Error())
-		}
+		lst = hub.subscriptions.GetSubscribers(prefixedKey)
 		if len(lst) > 0 {
 			t.Fatal("unsubscribe failed, subscription still present")
 		}
@@ -292,11 +274,8 @@ func TestPrefixSubscription(t *testing.T) {
 		mustSucceed(t, waitReply(t, chn))
 
 		// Check that subscription is in database
-		prefixedKey := client.options.Namespace + "sub-test1234"
-		lst, err := dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
-		if err != nil {
-			t.Fatal("db error", err.Error())
-		}
+		prefixedKey := client.options.Namespace + "sub-test-1234"
+		lst := hub.subscriptions.GetSubscribers(prefixedKey)
 		if len(lst) < 1 {
 			t.Fatal("subscribe failed, subscription not present")
 		}
@@ -327,10 +306,7 @@ func TestPrefixSubscription(t *testing.T) {
 		mustSucceed(t, waitReply(t, chn))
 
 		// Check that subscription is not in database anymore
-		lst, err = dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
-		if err != nil {
-			t.Fatal("db error", err.Error())
-		}
+		lst = hub.subscriptions.GetSubscribers(prefixedKey)
 		if len(lst) > 0 {
 			t.Fatal("unsubscribe failed, subscription still present")
 		}
@@ -353,6 +329,7 @@ func TestAuthentication(t *testing.T) {
 	go client.Run()
 
 	hub.register <- client
+	client.Wait()
 
 	// Make sure client is not authenticated
 	if hub.clients.Authenticated(client.UID()) {
@@ -397,7 +374,7 @@ func TestAuthentication(t *testing.T) {
 func waitReply(t *testing.T, chn <-chan interface{}) interface{} {
 	// Wait for response or timeout
 	select {
-	case <-time.After(20 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("server took too long to respond")
 	case response := <-chn:
 		return response

@@ -4,6 +4,8 @@ import (
 	"flag"
 	"net/http"
 
+	"github.com/strimertul/kilovolt/v7/drivers/badgerdb"
+
 	"go.uber.org/zap"
 
 	"github.com/dgraph-io/badger/v3"
@@ -28,7 +30,7 @@ func main() {
 	logger, _ := zap.NewDevelopment()
 
 	// Initialize KV (required)
-	hub, err := kv.NewHub(db, kv.HubOptions{Password: *password}, logger)
+	hub, err := kv.NewHub(badgerdb.NewBadgerBackend(db), kv.HubOptions{Password: *password}, logger)
 	if err != nil {
 		panic(err)
 	}

@@ -1,6 +1,6 @@
 # Kilovolt
 
-Websocket-based APIs for [Badger](https://github.com/dgraph-io/badger). Does not aim to give access to all features (for the time being), mostly what's needed for [strimertul](https://github.com/strimertul/strimertul) and [stulbe](https://github.com/strimertul/stulbe/)
+Websocket-based Key-value store, can use many databases on the backend (currently BBolt/BadgerDB). Has a slim set of features (get/set/pub/sub), mostly what's needed for [strimertul](https://github.com/strimertul/strimertul) and [stulbe](https://github.com/strimertul/stulbe/)
 
 ## Clients
 
