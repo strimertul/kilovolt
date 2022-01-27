@@ -1,6 +1,7 @@
 package mapkv
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/strimertul/kilovolt/v7/drivers"
@@ -62,6 +63,7 @@ func (b *Backend) List(prefix string) ([]string, error) {
 			keys = append(keys, k)
 		}
 	}
+	sort.Sort(sort.StringSlice(keys))
 	return keys, nil
 }
 

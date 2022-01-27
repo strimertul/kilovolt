@@ -11,5 +11,5 @@
 
 # v6 to v7
 
-- API changed significantly, support for multiple DB backends
+- API changed significantly, support for multiple DB backends.
 - Logging library changed to logrus to zap.
