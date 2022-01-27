@@ -7,8 +7,9 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"go.uber.org/zap"
+
 	"github.com/dgraph-io/badger/v3"
-	"github.com/sirupsen/logrus"
 )
 
 type commandHandlerFn func(*Hub, Client, Request)
@@ -50,10 +51,7 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 		if err != nil {
 			if err == badger.ErrKeyNotFound {
 				client.SendJSON(Response{"response", true, msg.RequestID, ""})
-				h.logger.WithFields(logrus.Fields{
-					"client": client.UID(),
-					"key":    realKey,
-				}).Debug("get for inexistant key")
+				h.logger.Debug("get for inexistant key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 				return nil
 			}
 			return err
@@ -63,10 +61,7 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 			return err
 		}
 		client.SendJSON(Response{"response", true, msg.RequestID, string(byt)})
-		h.logger.WithFields(logrus.Fields{
-			"client": client.UID(),
-			"key":    realKey,
-		}).Debug("get key")
+		h.logger.Debug("get key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 		return nil
 	})
 
@@ -123,10 +118,7 @@ func cmdReadBulk(h *Hub, client Client, msg Request) {
 		sendErr(client, ErrServerError, "server error: "+err.Error(), msg.RequestID)
 		return
 	}
-	h.logger.WithFields(logrus.Fields{
-		"client": client.UID(),
-		"keys":   realKeys,
-	}).Debug("get multi key")
+	h.logger.Debug("get multi key", zap.Int64("client", client.UID()), zap.Strings("keys", realKeys))
 	client.SendJSON(Response{"response", true, msg.RequestID, out})
 }
 
@@ -167,10 +159,7 @@ func cmdReadPrefix(h *Hub, client Client, msg Request) {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
-	h.logger.WithFields(logrus.Fields{
-		"client": client.UID(),
-		"prefix": prefix,
-	}).Debug("get all (prefix)")
+	h.logger.Debug("get all (prefix)", zap.Int64("client", client.UID()), zap.String("prefix", prefix))
 	client.SendJSON(Response{"response", true, msg.RequestID, out})
 }
 
@@ -205,10 +194,7 @@ func cmdWriteKey(h *Hub, client Client, msg Request) {
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 
-	h.logger.WithFields(logrus.Fields{
-		"client": client.UID(),
-		"key":    realKey,
-	}).Debug("modified key")
+	h.logger.Debug("modified key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 }
 
 func cmdWriteBulk(h *Hub, client Client, msg Request) {
@@ -244,9 +230,7 @@ func cmdWriteBulk(h *Hub, client Client, msg Request) {
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 
-	h.logger.WithFields(logrus.Fields{
-		"client": client.UID(),
-	}).Debug("bulk modify keys")
+	h.logger.Debug("bulk modify keys", zap.Int64("client", client.UID()))
 }
 
 func cmdSubscribeKey(h *Hub, client Client, msg Request) {
@@ -269,10 +253,7 @@ func cmdSubscribeKey(h *Hub, client Client, msg Request) {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
-	h.logger.WithFields(logrus.Fields{
-		"client": client.UID(),
-		"key":    realKey,
-	}).Debug("subscribed to key")
+	h.logger.Debug("subscribed to key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 }
@@ -297,10 +278,7 @@ func cmdSubscribePrefix(h *Hub, client Client, msg Request) {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
-	h.logger.WithFields(logrus.Fields{
-		"client": client.UID(),
-		"prefix": realPrefix,
-	}).Debug("subscribed to prefix")
+	h.logger.Debug("subscribed to prefix", zap.Int64("client", client.UID()), zap.String("prefix", realPrefix))
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 }
@@ -325,10 +303,7 @@ func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
-	h.logger.WithFields(logrus.Fields{
-		"client": client.UID(),
-		"key":    realKey,
-	}).Debug("unsubscribed to key")
+	h.logger.Debug("unsubscribed to key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 
@@ -355,10 +330,7 @@ func cmdUnsubscribePrefix(h *Hub, client Client, msg Request) {
 		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
 		return
 	}
-	h.logger.WithFields(logrus.Fields{
-		"client": client.UID(),
-		"prefix": realPrefix,
-	}).Debug("unsubscribed from prefix")
+	h.logger.Debug("unsubscribed from prefix", zap.Int64("client", client.UID()), zap.String("prefix", realPrefix))
 
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
@@ -404,10 +376,7 @@ func cmdListKeys(h *Hub, client Client, msg Request) {
 	if len(out) < 1 {
 		out = []string{}
 	}
-	h.logger.WithFields(logrus.Fields{
-		"client": client.UID(),
-		"prefix": prefix,
-	}).Debug("list keys")
+	h.logger.Debug("list keys", zap.Int64("client", client.UID()), zap.String("prefix", prefix))
 	client.SendJSON(Response{"response", true, msg.RequestID, out})
 }
 

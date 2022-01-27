@@ -8,3 +8,7 @@
 ## v4/5 to v6
 
 *No breaking changes*
+
+# v6 to v7
+
+- Logging library changed to logrus to zap.

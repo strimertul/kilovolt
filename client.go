@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -84,10 +85,7 @@ func (c *WebsocketClient) readPump(hub *Hub) {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				hub.logger.WithFields(logrus.Fields{
-					"error":  err.Error(),
-					"client": c.conn.RemoteAddr(),
-				}).Info("abnormal close from client")
+				hub.logger.Info("abnormal close from client", zap.Error(err), zap.String("client", c.conn.RemoteAddr().String()))
 			}
 			break
 		}
@@ -176,7 +174,7 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 func (hub *Hub) CreateClient(w http.ResponseWriter, r *http.Request, options ClientOptions) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		hub.logger.WithField("error", err.Error()).Error("error starting websocket session")
+		hub.logger.Error("error starting websocket session", zap.Error(err))
 		return
 	}
 	client := &WebsocketClient{

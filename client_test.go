@@ -7,7 +7,7 @@ import (
 	_ "testing"
 
 	jsoniter "github.com/json-iterator/go"
-	"github.com/sirupsen/logrus"
+	"go.uber.org/zap"
 )
 
 type mockClient struct {
@@ -21,13 +21,13 @@ type mockClient struct {
 	pushes    chan Push
 	responses chan Response
 
-	logger  logrus.FieldLogger
+	logger  *zap.Logger
 	options ClientOptions
 
 	mu sync.Mutex
 }
 
-func newMockClient(log logrus.FieldLogger) *mockClient {
+func newMockClient(log *zap.Logger) *mockClient {
 	return &mockClient{
 		uid:       0,
 		send:      make(chan []byte),
@@ -44,7 +44,7 @@ func newMockClient(log logrus.FieldLogger) *mockClient {
 
 func (m *mockClient) Run() {
 	for data := range m.send {
-		m.logger.WithField("data", string(data)).Info("received from server")
+		m.logger.Info("received from server", zap.String("data", string(data)))
 		var response Response
 		jsoniter.ConfigFastest.Unmarshal(data, &response)
 		// Check message
@@ -112,11 +112,19 @@ func (c *mockClient) UID() int64 {
 
 func (c *mockClient) SendJSON(data interface{}) {
 	msg, _ := json.Marshal(data)
-	c.send <- msg
+	if c.send != nil {
+		c.send <- msg
+	} else {
+		c.logger.Warn("send message called on closed client")
+	}
 }
 
 func (c *mockClient) SendMessage(data []byte) {
-	c.send <- data
+	if c.send != nil {
+		c.send <- data
+	} else {
+		c.logger.Warn("send message called on closed client")
+	}
 }
 
 func (c *mockClient) Options() ClientOptions {

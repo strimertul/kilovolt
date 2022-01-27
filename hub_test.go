@@ -4,13 +4,13 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/dgraph-io/badger/v3"
-	"github.com/sirupsen/logrus"
 )
 
 func TestHub(t *testing.T) {
-	log := logrus.New()
-	log.Level = logrus.TraceLevel
+	log, _ := zap.NewDevelopment()
 
 	var hub *Hub
 	t.Run("create", func(t *testing.T) {
@@ -48,9 +48,9 @@ func TestHub(t *testing.T) {
 	})
 }
 
-func createInMemoryHub(t *testing.T, log logrus.FieldLogger) *Hub {
+func createInMemoryHub(t *testing.T, log *zap.Logger) *Hub {
 	// Open in-memory DB
-	options := badger.DefaultOptions("").WithInMemory(true).WithLogger(log)
+	options := badger.DefaultOptions("").WithInMemory(true)
 	db, err := badger.Open(options)
 	if err != nil {
 		t.Fatal("db initialization failed", err.Error())

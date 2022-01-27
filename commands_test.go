@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/dgraph-io/badger/v3"
+
+	"go.uber.org/zap"
 )
 
-func TestCommands(t *testing.T) {
-	log := logrus.New()
-	log.Level = logrus.TraceLevel
-
+func makeHubClient(t *testing.T, test func(hub *Hub, client *mockClient)) {
+	log, _ := zap.NewDevelopment()
 	hub := createInMemoryHub(t, log)
 	defer hub.Close()
 	go hub.Run()
@@ -24,50 +24,103 @@ func TestCommands(t *testing.T) {
 
 	hub.register <- client
 
-	t.Run("kset", func(t *testing.T) {
+	test(hub, client)
+}
+
+func prepareKey(t *testing.T, hub *Hub, key string, expected string) {
+	err := hub.db.Update(func(txn *badger.Txn) error {
+		return txn.Set([]byte("@test/"+key), []byte(expected))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertKey(t *testing.T, hub *Hub, key string, expected string) {
+	err := hub.db.View(func(txn *badger.Txn) error {
+		val, err := txn.Get([]byte("@test/" + key))
+		if err != nil {
+			if err == badger.ErrKeyNotFound {
+				t.Errorf("Key '%s' not found", key)
+			} else {
+				t.Errorf("Error getting key '%s': %s", key, err)
+			}
+			return nil
+		}
+		byt, err := val.ValueCopy(nil)
+		if err != nil {
+			return err
+		}
+		if string(byt) != expected {
+			t.Errorf("Expected '%s', got '%s'", expected, string(byt))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestKeySet(t *testing.T) {
+	makeHubClient(t, func(hub *Hub, client *mockClient) {
 		req, chn := client.MakeRequest(CmdWriteKey, map[string]interface{}{
 			"key":  "test",
-			"data": "testvalue",
+			"data": "test-value",
 		})
 		hub.incoming <- req
 		mustSucceed(t, waitReply(t, chn))
+		assertKey(t, hub, "test", "test-value")
 	})
+}
 
-	t.Run("kget", func(t *testing.T) {
+func TestKeyGet(t *testing.T) {
+	makeHubClient(t, func(hub *Hub, client *mockClient) {
+		prepareKey(t, hub, "test", "test-value")
 		req, chn := client.MakeRequest(CmdReadKey, map[string]interface{}{
 			"key": "test",
 		})
 		hub.incoming <- req
 		resp := mustSucceed(t, waitReply(t, chn))
 		// Check that reply is correct
-		if resp.Data.(string) != "testvalue" {
+		if resp.Data.(string) != "test-value" {
 			t.Fatalf("response value for kget expected to be \"testvalue\", got \"%v\"", resp.Data)
 		}
 	})
+}
 
-	t.Run("kset-bulk", func(t *testing.T) {
+func TestKeySetBulk(t *testing.T) {
+	makeHubClient(t, func(hub *Hub, client *mockClient) {
 		req, chn := client.MakeRequest(CmdWriteBulk, map[string]interface{}{
 			"key1": "value1",
 			"key2": "value2",
 		})
 		hub.incoming <- req
 		mustSucceed(t, waitReply(t, chn))
+		assertKey(t, hub, "key1", "value1")
+		assertKey(t, hub, "key2", "value2")
 	})
+}
 
-	t.Run("klist", func(t *testing.T) {
+func TestKeyList(t *testing.T) {
+	makeHubClient(t, func(hub *Hub, client *mockClient) {
+		prepareKey(t, hub, "key1", "test-value")
+		prepareKey(t, hub, "key2", "test-value")
 		req, chn := client.MakeRequest(CmdListKeys, map[string]interface{}{
 			"prefix": "key",
 		})
 		hub.incoming <- req
 		resp := mustSucceed(t, waitReply(t, chn))
-		// Check that reply is correct (empty)
 		data := resp.Data.([]interface{})
 		if len(data) != 2 {
 			t.Fatalf("response value for klist expected to be a 2 item list, got \"%v\"", resp.Data)
 		}
 	})
+}
 
-	t.Run("kget-bulk", func(t *testing.T) {
+func TestKeyGetBulk(t *testing.T) {
+	makeHubClient(t, func(hub *Hub, client *mockClient) {
+		prepareKey(t, hub, "key1", "value1")
+		prepareKey(t, hub, "key2", "value2")
 		req, chn := client.MakeRequest(CmdReadBulk, map[string]interface{}{
 			"keys": []string{"key1", "key2"},
 		})
@@ -79,8 +132,12 @@ func TestCommands(t *testing.T) {
 			t.Fatal("response values are different from what expected", values)
 		}
 	})
+}
 
-	t.Run("kget-all", func(t *testing.T) {
+func TestKeyGetPrefix(t *testing.T) {
+	makeHubClient(t, func(hub *Hub, client *mockClient) {
+		prepareKey(t, hub, "key1", "value1")
+		prepareKey(t, hub, "key2", "value2")
 		req, chn := client.MakeRequest(CmdReadPrefix, map[string]interface{}{
 			"prefix": "key",
 		})
@@ -92,42 +149,12 @@ func TestCommands(t *testing.T) {
 			t.Fatal("response values are different from what expected", values)
 		}
 	})
+}
 
-	t.Run("ksub", func(t *testing.T) {
-		req, chn := client.MakeRequest(CmdSubscribeKey, map[string]interface{}{
-			"key": "test",
-		})
-		hub.incoming <- req
-		mustSucceed(t, waitReply(t, chn))
-	})
-
-	t.Run("kunsub", func(t *testing.T) {
-		req, chn := client.MakeRequest(CmdUnsubscribeKey, map[string]interface{}{
-			"key": "test",
-		})
-		hub.incoming <- req
-		mustSucceed(t, waitReply(t, chn))
-	})
-
-	t.Run("ksub-prefix", func(t *testing.T) {
-		req, chn := client.MakeRequest(CmdSubscribePrefix, map[string]interface{}{
-			"prefix": "t",
-		})
-		hub.incoming <- req
-		mustSucceed(t, waitReply(t, chn))
-	})
-
-	t.Run("kunsub-prefix", func(t *testing.T) {
-		req, chn := client.MakeRequest(CmdUnsubscribePrefix, map[string]interface{}{
-			"prefix": "t",
-		})
-		hub.incoming <- req
-		mustSucceed(t, waitReply(t, chn))
-	})
-
-	t.Run("kget inexistant", func(t *testing.T) {
+func TestKeyGetEmpty(t *testing.T) {
+	makeHubClient(t, func(hub *Hub, client *mockClient) {
 		req, chn := client.MakeRequest(CmdReadKey, map[string]interface{}{
-			"key": "__ this key doesn't exist I swear __",
+			"key": "test",
 		})
 		hub.incoming <- req
 		resp := mustSucceed(t, waitReply(t, chn))
@@ -136,30 +163,31 @@ func TestCommands(t *testing.T) {
 			t.Fatalf("response value for kget expected to be empty, got \"%v\"", resp.Data)
 		}
 	})
+}
 
-	//
-	// Error conditions
-	//
-
-	// Missing parameters
+func TestErrorMissingParam(t *testing.T) {
 	noParams := []string{
 		CmdReadKey, CmdReadBulk, CmdReadPrefix, CmdWriteKey,
 		CmdSubscribeKey, CmdSubscribePrefix, CmdUnsubscribeKey, CmdUnsubscribePrefix,
 	}
 	for _, cmd := range noParams {
 		t.Run(cmd+" with wrong key", func(t *testing.T) {
-			req, chn := client.MakeRequest(cmd, map[string]interface{}{
-				"@dingus": "bogus",
+			makeHubClient(t, func(hub *Hub, client *mockClient) {
+				req, chn := client.MakeRequest(cmd, map[string]interface{}{
+					"@dingus": "bogus",
+				})
+				hub.incoming <- req
+				resp := mustFail(t, waitReply(t, chn))
+				// Check that reply is correct (empty)
+				if resp.Error != ErrMissingParam {
+					t.Fatalf("error value for %s expected to be \"%s\", got \"%s\"", cmd, ErrMissingParam, resp.Error)
+				}
 			})
-			hub.incoming <- req
-			resp := mustFail(t, waitReply(t, chn))
-			// Check that reply is correct (empty)
-			if resp.Error != ErrMissingParam {
-				t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrMissingParam, resp.Error)
-			}
 		})
 	}
+}
 
+func TestErrorWrongType(t *testing.T) {
 	wrongType := map[string]map[string]interface{}{
 		CmdReadKey:           {"key": 1234},
 		CmdReadBulk:          {"keys": 1234},
@@ -172,165 +200,148 @@ func TestCommands(t *testing.T) {
 	}
 	for cmd, data := range wrongType {
 		t.Run(cmd+" with invalid key type", func(t *testing.T) {
-			req, chn := client.MakeRequest(cmd, data)
-			hub.incoming <- req
-			resp := mustFail(t, waitReply(t, chn))
-			// Check that reply is correct (empty)
-			if resp.Error != ErrMissingParam {
-				t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrMissingParam, resp.Error)
-			}
+			makeHubClient(t, func(hub *Hub, client *mockClient) {
+				req, chn := client.MakeRequest(cmd, data)
+				hub.incoming <- req
+				resp := mustFail(t, waitReply(t, chn))
+				// Check that reply is correct (empty)
+				if resp.Error != ErrMissingParam {
+					t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrMissingParam, resp.Error)
+				}
+			})
 		})
 	}
 
 	// kset-bulk is special, returns InvalidFmt on wrong format
 	t.Run(CmdWriteBulk+" with invalid key type", func(t *testing.T) {
-		req, chn := client.MakeRequest(CmdWriteBulk, map[string]interface{}{"test": 1234})
-		hub.incoming <- req
-		resp := mustFail(t, waitReply(t, chn))
-		// Check that reply is correct (empty)
-		if resp.Error != ErrInvalidFmt {
-			t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrInvalidFmt, resp.Error)
-		}
+		makeHubClient(t, func(hub *Hub, client *mockClient) {
+			req, chn := client.MakeRequest(CmdWriteBulk, map[string]interface{}{"test": 1234})
+			hub.incoming <- req
+			resp := mustFail(t, waitReply(t, chn))
+			// Check that reply is correct (empty)
+			if resp.Error != ErrInvalidFmt {
+				t.Fatalf("error value for kget expected to be \"%s\", got \"%s\"", ErrInvalidFmt, resp.Error)
+			}
+		})
 	})
 }
 
 func TestKeySubscription(t *testing.T) {
-	log := logrus.New()
-	log.Level = logrus.TraceLevel
+	makeHubClient(t, func(hub *Hub, client *mockClient) {
+		// Subscribe to key
+		req, chn := client.MakeRequest(CmdSubscribeKey, map[string]interface{}{
+			"key": "sub-test",
+		})
+		hub.incoming <- req
+		mustSucceed(t, waitReply(t, chn))
 
-	hub := createInMemoryHub(t, log)
-	defer hub.Close()
-	go hub.Run()
-
-	client := newMockClient(log)
-	defer client.Close()
-	go client.Run()
-
-	hub.register <- client
-
-	// Subscribe to key
-	req, chn := client.MakeRequest(CmdSubscribeKey, map[string]interface{}{
-		"key": "sub-test",
-	})
-	hub.incoming <- req
-	mustSucceed(t, waitReply(t, chn))
-
-	// Check that subscription is in database
-	prefixedKey := client.options.Namespace + "sub-test"
-	lst, err := dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
-	if err != nil {
-		t.Fatal("db error", err.Error())
-	}
-	if len(lst) < 1 {
-		t.Fatal("subscribe failed, subscription not present")
-	}
-
-	// Modify key
-	req, chn = client.MakeRequest(CmdWriteKey, map[string]interface{}{
-		"key":  "sub-test",
-		"data": "yo this is a new value!",
-	})
-	hub.incoming <- req
-	mustSucceed(t, waitReply(t, chn))
-
-	// Check for pushes
-	select {
-	case <-time.After(20 * time.Second):
-		t.Fatal("push took too long to arrive")
-	case push := <-client.pushes:
-		if push.Key != "sub-test" || push.NewValue != "yo this is a new value!" {
-			t.Fatal("wrong push received", push)
+		// Check that subscription is in database
+		prefixedKey := client.options.Namespace + "sub-test"
+		lst, err := dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
+		if err != nil {
+			t.Fatal("db error", err.Error())
 		}
-	}
+		if len(lst) < 1 {
+			t.Fatal("subscribe failed, subscription not present")
+		}
 
-	// Unsubscribe to key
-	req, chn = client.MakeRequest(CmdUnsubscribeKey, map[string]interface{}{
-		"key": "sub-test",
+		// Modify key
+		req, chn = client.MakeRequest(CmdWriteKey, map[string]interface{}{
+			"key":  "sub-test",
+			"data": "yo this is a new value!",
+		})
+		hub.incoming <- req
+		mustSucceed(t, waitReply(t, chn))
+
+		// Check for pushes
+		select {
+		case <-time.After(10 * time.Second):
+			t.Fatal("push took too long to arrive")
+		case push := <-client.pushes:
+			if push.Key != "sub-test" || push.NewValue != "yo this is a new value!" {
+				t.Fatal("wrong push received", push)
+			}
+		}
+
+		// Unsubscribe to key
+		req, chn = client.MakeRequest(CmdUnsubscribeKey, map[string]interface{}{
+			"key": "sub-test",
+		})
+		hub.incoming <- req
+		mustSucceed(t, waitReply(t, chn))
+
+		// Check that subscription is not in database anymore
+		lst, err = dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
+		if err != nil {
+			t.Fatal("db error", err.Error())
+		}
+		if len(lst) > 0 {
+			t.Fatal("unsubscribe failed, subscription still present")
+		}
 	})
-	hub.incoming <- req
-	mustSucceed(t, waitReply(t, chn))
-
-	// Check that subscription is not in database anymore
-	lst, err = dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
-	if err != nil {
-		t.Fatal("db error", err.Error())
-	}
-	if len(lst) > 0 {
-		t.Fatal("unsubscribe failed, subscription still present")
-	}
 }
 
 func TestPrefixSubscription(t *testing.T) {
-	log := logrus.New()
-	log.Level = logrus.TraceLevel
+	makeHubClient(t, func(hub *Hub, client *mockClient) {
 
-	hub := createInMemoryHub(t, log)
-	defer hub.Close()
-	go hub.Run()
+		// Subscribe to key
+		req, chn := client.MakeRequest(CmdSubscribePrefix, map[string]interface{}{
+			"prefix": "sub-",
+		})
+		hub.incoming <- req
+		mustSucceed(t, waitReply(t, chn))
 
-	client := newMockClient(log)
-	defer client.Close()
-	go client.Run()
-
-	hub.register <- client
-
-	// Subscribe to key
-	req, chn := client.MakeRequest(CmdSubscribePrefix, map[string]interface{}{
-		"prefix": "sub-",
-	})
-	hub.incoming <- req
-	mustSucceed(t, waitReply(t, chn))
-
-	// Check that subscription is in database
-	prefixedKey := client.options.Namespace + "sub-test1234"
-	lst, err := dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
-	if err != nil {
-		t.Fatal("db error", err.Error())
-	}
-	if len(lst) < 1 {
-		t.Fatal("subscribe failed, subscription not present")
-	}
-
-	// Modify key
-	req, chn = client.MakeRequest(CmdWriteKey, map[string]interface{}{
-		"key":  "sub-test-1234",
-		"data": "yo this is a new value!",
-	})
-	hub.incoming <- req
-	mustSucceed(t, waitReply(t, chn))
-
-	// Check for pushes
-	select {
-	case <-time.After(20 * time.Second):
-		t.Fatal("push took too long to arrive")
-	case push := <-client.pushes:
-		if push.Key != "sub-test-1234" || push.NewValue != "yo this is a new value!" {
-			t.Fatal("wrong push received", push)
+		// Check that subscription is in database
+		prefixedKey := client.options.Namespace + "sub-test1234"
+		lst, err := dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
+		if err != nil {
+			t.Fatal("db error", err.Error())
 		}
-	}
+		if len(lst) < 1 {
+			t.Fatal("subscribe failed, subscription not present")
+		}
 
-	// Unsubscribe to key
-	req, chn = client.MakeRequest(CmdUnsubscribePrefix, map[string]interface{}{
-		"prefix": "sub-",
+		// Modify key
+		req, chn = client.MakeRequest(CmdWriteKey, map[string]interface{}{
+			"key":  "sub-test-1234",
+			"data": "yo this is a new value!",
+		})
+		hub.incoming <- req
+		mustSucceed(t, waitReply(t, chn))
+
+		// Check for pushes
+		select {
+		case <-time.After(10 * time.Second):
+			t.Fatal("push took too long to arrive")
+		case push := <-client.pushes:
+			if push.Key != "sub-test-1234" || push.NewValue != "yo this is a new value!" {
+				t.Fatal("wrong push received", push)
+			}
+		}
+
+		// Unsubscribe to key
+		req, chn = client.MakeRequest(CmdUnsubscribePrefix, map[string]interface{}{
+			"prefix": "sub-",
+		})
+		hub.incoming <- req
+		mustSucceed(t, waitReply(t, chn))
+
+		// Check that subscription is not in database anymore
+		lst, err = dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
+		if err != nil {
+			t.Fatal("db error", err.Error())
+		}
+		if len(lst) > 0 {
+			t.Fatal("unsubscribe failed, subscription still present")
+		}
 	})
-	hub.incoming <- req
-	mustSucceed(t, waitReply(t, chn))
 
-	// Check that subscription is not in database anymore
-	lst, err = dbGetSubscribersForKey(hub.memdb, []byte(prefixedKey))
-	if err != nil {
-		t.Fatal("db error", err.Error())
-	}
-	if len(lst) > 0 {
-		t.Fatal("unsubscribe failed, subscription still present")
-	}
 }
 
 func TestAuthentication(t *testing.T) {
 	const password = "test"
 
-	log := logrus.New()
-	log.Level = logrus.TraceLevel
+	log, _ := zap.NewDevelopment()
 
 	hub := createInMemoryHub(t, log)
 	hub.SetOptions(HubOptions{Password: password})
@@ -374,6 +385,7 @@ func TestAuthentication(t *testing.T) {
 		"hash": base64.StdEncoding.EncodeToString(hashBytes),
 	})
 	hub.incoming <- req
+
 	mustSucceed(t, waitReply(t, chn))
 
 	// Make sure client is authenticated now

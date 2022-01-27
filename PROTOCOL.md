@@ -2,7 +2,7 @@
 
 Kilovolt exposes a WebSocket server and speaks using text JSON messages.
 
-**Note:** This documentation pertains to Kilovolt protocol version `v6`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
+**Note:** This documentation pertains to Kilovolt protocol version `v7`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
 
 ## Message format
 
@@ -33,7 +33,7 @@ The Hello message is delivered as soon as a connection is established and contai
 ```json
 {
   "type": "hello",
-  "version": "v4"
+  "version": "v7"
 }
 ```
 

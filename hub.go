@@ -7,10 +7,11 @@ import (
 	"fmt"
 	mrand "math/rand"
 
+	"go.uber.org/zap"
+
 	"github.com/dgraph-io/badger/v3"
 	"github.com/dgraph-io/badger/v3/pb"
 	jsoniter "github.com/json-iterator/go"
-	"github.com/sirupsen/logrus"
 )
 
 type rawMessage struct {
@@ -32,14 +33,14 @@ type Hub struct {
 	db    *badger.DB
 	memdb *badger.DB
 
-	logger logrus.FieldLogger
+	logger *zap.Logger
 }
 
 var json = jsoniter.ConfigDefault
 
-func NewHub(db *badger.DB, options HubOptions, logger logrus.FieldLogger) (*Hub, error) {
+func NewHub(db *badger.DB, options HubOptions, logger *zap.Logger) (*Hub, error) {
 	if logger == nil {
-		logger = logrus.New()
+		logger, _ = zap.NewProduction()
 	}
 
 	// Create temporary DB for subscriptions
@@ -60,9 +61,11 @@ func NewHub(db *badger.DB, options HubOptions, logger logrus.FieldLogger) (*Hub,
 	}
 
 	go func() {
-		err := db.Subscribe(context.Background(), hub.update, []byte{})
+		err := db.Subscribe(context.Background(), hub.update, []pb.Match{{
+			Prefix: []byte{},
+		}})
 		if err != nil {
-			logger.WithError(err).Error("db subscription halted because of error")
+			logger.Error("db subscription halted because of error", zap.Error(err))
 		}
 	}()
 
@@ -123,7 +126,7 @@ func (hub *Hub) randomBytes() []byte {
 	saltBytes := make([]byte, 32)
 	_, err := crand.Read(saltBytes)
 	if err != nil {
-		hub.logger.WithError(err).Warn("failed to generate secure bytes, falling back to insecure PRNG")
+		hub.logger.Warn("failed to generate secure bytes, falling back to insecure PRNG", zap.Error(err))
 		insecureBytes := make([]byte, 8)
 		binary.LittleEndian.PutUint64(insecureBytes, mrand.Uint64())
 		return insecureBytes
@@ -149,7 +152,7 @@ func (hub *Hub) Run() {
 		case client := <-hub.unregister:
 			// Unsubscribe from all keys
 			if err := dbUnsubscribeFromAll(hub.memdb, client); err != nil {
-				hub.logger.WithError(err).WithField("clientid", client.UID()).Error("error removing subscriptions for client")
+				hub.logger.Error("error removing subscriptions for client", zap.Error(err), zap.Int64("client-id", client.UID()))
 			}
 
 			// Delete entry and close channel
