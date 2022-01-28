@@ -11,9 +11,12 @@ Official drivers exist for the current databases:
 | Database   | Driver module            |
 |------------|--------------------------|
 | [BadgerDB] | [strimertul/kv-badgerdb] |
+| [Pebble]   | [strimertul/kv-pebble]   |
 
 [BadgerDB]: https://github.com/dgraph-io/badger
 [strimertul/kv-badgerdb]: https://github.com/strimertul/kv-badgerdb
+[Pebble]: https://github.com/cockroachdb/pebble
+[strimertul/kv-pebble]: https://github.com/strimertul/kv-pebble 
 
 If you have built a driver, feel free to submit a pull request to have it added to this README!
 
