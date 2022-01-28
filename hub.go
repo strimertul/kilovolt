@@ -8,7 +8,6 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/dgraph-io/badger/v3/pb"
 	jsoniter "github.com/json-iterator/go"
 )
 
@@ -65,24 +64,6 @@ func (hub *Hub) Close() {
 
 func (hub *Hub) SetOptions(options HubOptions) {
 	hub.options = options
-}
-
-func (hub *Hub) update(kvs *pb.KVList) error {
-	for _, kv := range kvs.Kv {
-		// Get subscribers
-		subscribers := hub.subscriptions.GetSubscribers(string(kv.Key))
-
-		// Notify subscribers
-		for _, clientid := range subscribers {
-			client, ok := hub.clients.GetByID(clientid)
-			if ok {
-				options := client.Options()
-				submsg, _ := json.Marshal(Push{"push", string(kv.Key[len(options.Namespace):]), string(kv.Value)})
-				client.SendMessage(submsg)
-			}
-		}
-	}
-	return nil
 }
 
 func (hub *Hub) handleCmd(client Client, message rawMessage) {
