@@ -1,6 +1,6 @@
 # Kilovolt
 
-Websocket-based Key-value store, can use many databases on the backend (currently BBolt/BadgerDB). Has a slim set of features (get/set/pub/sub), mostly what's needed for [strimertul](https://github.com/strimertul/strimertul) and [stulbe](https://github.com/strimertul/stulbe/)
+Websocket-based Key-value store, can use many databases on the backend. Has a slim set of features (get/set/pub/sub), mostly what's needed for [strimertul](https://github.com/strimertul/strimertul) and [stulbe](https://github.com/strimertul/stulbe/)
 
 ## Drivers
 
@@ -8,9 +8,12 @@ To use kilovolt, you will need a database driver.
 
 Official drivers exist for the current databases:
 
-| Database | Driver module                                                       |
-|----------|---------------------------------------------------------------------|
-| BadgerDB | [strimertul/kv-badgerdb](https://github.com/strimertul/kv-badgerdb) |
+| Database   | Driver module            |
+|------------|--------------------------|
+| [BadgerDB] | [strimertul/kv-badgerdb] |
+
+[BadgerDB]: https://github.com/dgraph-io/badger
+[strimertul/kv-badgerdb]: https://github.com/strimertul/kv-badgerdb
 
 If you have built a driver, feel free to submit a pull request to have it added to this README!
 
