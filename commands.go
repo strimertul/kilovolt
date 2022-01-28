@@ -7,8 +7,6 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"github.com/strimertul/kilovolt/v7/drivers"
-
 	"go.uber.org/zap"
 )
 
@@ -48,7 +46,7 @@ func cmdReadKey(h *Hub, client Client, msg Request) {
 
 	data, err := h.db.Get(realKey)
 	if err != nil {
-		if err == drivers.ErrorKeyNotFound {
+		if err == ErrorKeyNotFound {
 			client.SendJSON(Response{"response", true, msg.RequestID, ""})
 			h.logger.Debug("get for non-existent key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 			return

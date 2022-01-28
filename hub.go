@@ -6,8 +6,6 @@ import (
 	"fmt"
 	mrand "math/rand"
 
-	"github.com/strimertul/kilovolt/v7/drivers"
-
 	"go.uber.org/zap"
 
 	"github.com/dgraph-io/badger/v3/pb"
@@ -31,14 +29,14 @@ type Hub struct {
 	unregister    chan Client
 	subscriptions *SubscriptionManager
 
-	db drivers.Backend
+	db Driver
 
 	logger *zap.Logger
 }
 
 var json = jsoniter.ConfigDefault
 
-func NewHub(db drivers.Backend, options HubOptions, logger *zap.Logger) (*Hub, error) {
+func NewHub(db Driver, options HubOptions, logger *zap.Logger) (*Hub, error) {
 	if logger == nil {
 		logger, _ = zap.NewProduction()
 	}

@@ -1,4 +1,4 @@
-package mapkv
+package kv
 
 import (
 	"testing"

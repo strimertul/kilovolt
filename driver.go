@@ -1,4 +1,4 @@
-package drivers
+package kv
 
 import "errors"
 
@@ -6,7 +6,7 @@ var (
 	ErrorKeyNotFound = errors.New("key not found")
 )
 
-type Backend interface {
+type Driver interface {
 	Get(key string) (string, error)
 	GetBulk(keys []string) (map[string]string, error)
 	GetPrefix(prefix string) (map[string]string, error)

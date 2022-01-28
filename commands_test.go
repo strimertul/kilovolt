@@ -7,8 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/strimertul/kilovolt/v7/drivers"
-
 	"go.uber.org/zap"
 )
 
@@ -38,7 +36,7 @@ func prepareKey(t *testing.T, hub *Hub, key string, expected string) {
 func assertKey(t *testing.T, hub *Hub, key string, expected string) {
 	val, err := hub.db.Get("@test/" + key)
 	if err != nil {
-		if err == drivers.ErrorKeyNotFound {
+		if err == ErrorKeyNotFound {
 			t.Errorf("Key '%s' not found", key)
 		} else {
 			t.Errorf("Error getting key '%s': %s", key, err)

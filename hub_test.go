@@ -4,8 +4,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/strimertul/kilovolt/v7/drivers/mapkv"
-
 	"go.uber.org/zap"
 )
 
@@ -50,7 +48,7 @@ func TestHub(t *testing.T) {
 
 func createInMemoryHub(t *testing.T, log *zap.Logger) *Hub {
 	// Create hub with in-mem DB
-	hub, err := NewHub(mapkv.MakeBackend(), HubOptions{}, log)
+	hub, err := NewHub(MakeBackend(), HubOptions{}, log)
 	if err != nil {
 		t.Fatal("hub initialization failed", err.Error())
 	}

@@ -1,49 +1,47 @@
-package mapkv
+package kv
 
 import (
 	"sort"
 	"strings"
-
-	"github.com/strimertul/kilovolt/v7/drivers"
 )
 
-// Backend is an in-memory map[string]string driver. Should not be used!
-type Backend struct {
+// mapkv is an in-memory map[string]string driver. Should not be used!
+type mapkv struct {
 	data map[string]string
 }
 
-func MakeBackend() *Backend {
-	return &Backend{
+func MakeBackend() *mapkv {
+	return &mapkv{
 		data: make(map[string]string),
 	}
 }
 
-func (b *Backend) Get(key string) (string, error) {
+func (b *mapkv) Get(key string) (string, error) {
 	val, ok := b.data[key]
 	if !ok {
-		return "", drivers.ErrorKeyNotFound
+		return "", ErrorKeyNotFound
 	}
 	return val, nil
 }
 
-func (b *Backend) Set(key string, value string) error {
+func (b *mapkv) Set(key string, value string) error {
 	b.data[key] = value
 	return nil
 }
 
-func (b *Backend) Delete(key string) error {
+func (b *mapkv) Delete(key string) error {
 	delete(b.data, key)
 	return nil
 }
 
-func (b *Backend) SetBulk(data map[string]string) error {
+func (b *mapkv) SetBulk(data map[string]string) error {
 	for k, v := range data {
 		b.data[k] = v
 	}
 	return nil
 }
 
-func (b *Backend) GetBulk(keys []string) (map[string]string, error) {
+func (b *mapkv) GetBulk(keys []string) (map[string]string, error) {
 	result := make(map[string]string)
 	for _, k := range keys {
 		v, err := b.Get(k)
@@ -56,7 +54,7 @@ func (b *Backend) GetBulk(keys []string) (map[string]string, error) {
 	return result, nil
 }
 
-func (b *Backend) List(prefix string) ([]string, error) {
+func (b *mapkv) List(prefix string) ([]string, error) {
 	keys := make([]string, 0, len(b.data))
 	for k := range b.data {
 		if strings.HasPrefix(k, prefix) {
@@ -67,7 +65,7 @@ func (b *Backend) List(prefix string) ([]string, error) {
 	return keys, nil
 }
 
-func (b *Backend) GetPrefix(prefix string) (map[string]string, error) {
+func (b *mapkv) GetPrefix(prefix string) (map[string]string, error) {
 	result := make(map[string]string)
 	for k, v := range b.data {
 		if strings.HasPrefix(k, prefix) {
