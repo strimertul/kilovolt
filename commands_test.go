@@ -221,7 +221,7 @@ func TestKeySubscription(t *testing.T) {
 		req, chn := client.MakeRequest(CmdSubscribeKey, map[string]interface{}{
 			"key": "sub-test",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
 
 		// Check that subscription is in database
@@ -236,15 +236,22 @@ func TestKeySubscription(t *testing.T) {
 			"key":  "sub-test",
 			"data": "yo this is a new value!",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
+
+		// Check using callback (even though we can just use client.Pushes)
+		res := make(chan string)
+		cid := client.SetKeySubCallback("sub-test", func(key string, data string) {
+			res <- data
+		})
+		defer client.UnsetCallback(cid)
 
 		// Check for pushes
 		select {
 		case <-time.After(10 * time.Second):
 			t.Fatal("push took too long to arrive")
-		case push := <-client.Pushes:
-			if push.Key != "sub-test" || push.NewValue != "yo this is a new value!" {
+		case push := <-res:
+			if push != "yo this is a new value!" {
 				t.Fatal("wrong push received", push)
 			}
 		}
@@ -253,7 +260,7 @@ func TestKeySubscription(t *testing.T) {
 		req, chn = client.MakeRequest(CmdUnsubscribeKey, map[string]interface{}{
 			"key": "sub-test",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
 
 		// Check that subscription is not in database anymore

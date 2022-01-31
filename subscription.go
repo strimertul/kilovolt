@@ -4,28 +4,28 @@ import (
 	"bytes"
 )
 
-type SubscriptionManager struct {
+type subscriptionManager struct {
 	keySubscribers    map[string][]int64
 	prefixSubscribers map[string][]int64
 	hub               *Hub
 }
 
-func makeSubscriptionManager() *SubscriptionManager {
-	return &SubscriptionManager{
+func makeSubscriptionManager() *subscriptionManager {
+	return &subscriptionManager{
 		keySubscribers:    make(map[string][]int64),
 		prefixSubscribers: make(map[string][]int64),
 	}
 }
 
-func (s *SubscriptionManager) SubscribeKey(uid int64, key string) {
+func (s *subscriptionManager) SubscribeKey(uid int64, key string) {
 	s.keySubscribers[key] = append(s.keySubscribers[key], uid)
 }
 
-func (s *SubscriptionManager) SubscribePrefix(uid int64, prefix string) {
+func (s *subscriptionManager) SubscribePrefix(uid int64, prefix string) {
 	s.prefixSubscribers[prefix] = append(s.prefixSubscribers[prefix], uid)
 }
 
-func (s *SubscriptionManager) UnsubscribeKey(uid int64, key string) {
+func (s *subscriptionManager) UnsubscribeKey(uid int64, key string) {
 	subscribers := s.keySubscribers[key]
 	for i, subscriber := range subscribers {
 		if subscriber == uid {
@@ -35,7 +35,7 @@ func (s *SubscriptionManager) UnsubscribeKey(uid int64, key string) {
 	}
 }
 
-func (s *SubscriptionManager) UnsubscribePrefix(uid int64, prefix string) {
+func (s *subscriptionManager) UnsubscribePrefix(uid int64, prefix string) {
 	subscribers := s.prefixSubscribers[prefix]
 	for i, subscriber := range subscribers {
 		if subscriber == uid {
@@ -45,7 +45,7 @@ func (s *SubscriptionManager) UnsubscribePrefix(uid int64, prefix string) {
 	}
 }
 
-func (s *SubscriptionManager) UnsubscribeAll(uid int64) {
+func (s *subscriptionManager) UnsubscribeAll(uid int64) {
 	for key, subscribers := range s.keySubscribers {
 		for i, subscriber := range subscribers {
 			if subscriber == uid {
@@ -65,7 +65,7 @@ func (s *SubscriptionManager) UnsubscribeAll(uid int64) {
 	}
 }
 
-func (s *SubscriptionManager) GetSubscribers(key string) []int64 {
+func (s *subscriptionManager) GetSubscribers(key string) []int64 {
 	subscribers := make(map[int64]bool)
 
 	// Get subscribers for key
@@ -93,7 +93,7 @@ func (s *SubscriptionManager) GetSubscribers(key string) []int64 {
 	return result
 }
 
-func (s *SubscriptionManager) KeyChanged(key string, value string) {
+func (s *subscriptionManager) KeyChanged(key string, value string) {
 	// Notify subscribers
 	clients := s.GetSubscribers(key)
 	for _, clientID := range clients {

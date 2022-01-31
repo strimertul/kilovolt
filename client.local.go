@@ -9,6 +9,8 @@ import (
 	"go.uber.org/zap"
 )
 
+type SubscriptionCallback func(key string, value string)
+
 type LocalClient struct {
 	// Unique ID
 	uid int64
@@ -16,8 +18,10 @@ type LocalClient struct {
 	// Buffered channel of outbound messages.
 	send chan []byte
 
-	pending   map[string]chan interface{}
-	responses chan Response
+	subscriptions *subscriptionManager
+	callbacks     map[int64]SubscriptionCallback
+	pending       map[string]chan interface{}
+	responses     chan Response
 
 	logger  *zap.Logger
 	options ClientOptions
@@ -34,15 +38,17 @@ func NewLocalClient(options ClientOptions, log *zap.Logger) *LocalClient {
 	}
 
 	return &LocalClient{
-		uid:       0,
-		send:      make(chan []byte),
-		pending:   make(map[string]chan interface{}),
-		Pushes:    make(chan Push, 100),
-		responses: make(chan Response, 100),
-		logger:    log,
-		options:   options,
-		mu:        sync.Mutex{},
-		ready:     make(chan bool),
+		uid:           0,
+		send:          make(chan []byte),
+		subscriptions: makeSubscriptionManager(),
+		callbacks:     make(map[int64]SubscriptionCallback),
+		pending:       make(map[string]chan interface{}),
+		Pushes:        make(chan Push, 100),
+		responses:     make(chan Response, 100),
+		logger:        log,
+		options:       options,
+		mu:            sync.Mutex{},
+		ready:         make(chan bool),
 	}
 }
 
@@ -89,6 +95,13 @@ func (m *LocalClient) Run() {
 					m.logger.Error("failed to unmarshal push", zap.Error(err))
 					continue
 				}
+				subscriberIds := m.subscriptions.GetSubscribers(push.Key)
+				for _, subscriberId := range subscriberIds {
+					callback, ok := m.callbacks[subscriberId]
+					if ok {
+						callback(push.Key, push.NewValue)
+					}
+				}
 				m.Pushes <- push
 			case "hello":
 				m.ready <- true
@@ -121,6 +134,45 @@ func (c *LocalClient) MakeRequest(cmd string, data map[string]interface{}) (Mess
 		RequestID: requestID,
 	})
 	return Message{c, byt}, chn
+}
+
+func (c *LocalClient) createCallback(callback SubscriptionCallback) (id int64) {
+	for {
+		id = rand.Int63()
+		if _, ok := c.callbacks[id]; !ok {
+			c.callbacks[id] = callback
+			return
+		}
+	}
+}
+
+func (c *LocalClient) SetKeySubCallback(key string, callback SubscriptionCallback) int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Generate random, unused ID
+	id := c.createCallback(callback)
+	c.subscriptions.SubscribeKey(id, key)
+	return id
+}
+
+func (c *LocalClient) SetPrefixSubCallback(key string, callback SubscriptionCallback) int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Generate random, unused ID
+	id := c.createCallback(callback)
+	c.subscriptions.SubscribePrefix(id, key)
+	return id
+}
+
+func (c *LocalClient) UnsetCallback(id int64) {
+	_, ok := c.callbacks[id]
+	if !ok {
+		return
+	}
+	c.mu.Lock()
+	c.subscriptions.UnsubscribeAll(id)
+	delete(c.callbacks, id)
+	c.mu.Unlock()
 }
 
 func (c *LocalClient) SetUID(uid int64) {

@@ -27,7 +27,7 @@ type Hub struct {
 	incoming      chan Message
 	register      chan Client
 	unregister    chan Client
-	subscriptions *SubscriptionManager
+	subscriptions *subscriptionManager
 
 	db Driver
 
