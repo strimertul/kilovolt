@@ -56,7 +56,7 @@ func TestKeySet(t *testing.T) {
 			"key":  "test",
 			"data": "test-value",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
 		assertKey(t, hub, "test", "test-value")
 	})
@@ -68,7 +68,7 @@ func TestKeyGet(t *testing.T) {
 		req, chn := client.MakeRequest(CmdReadKey, map[string]interface{}{
 			"key": "test",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		resp := mustSucceed(t, waitReply(t, chn))
 		// Check that reply is correct
 		if resp.Data.(string) != "test-value" {
@@ -83,7 +83,7 @@ func TestKeySetBulk(t *testing.T) {
 			"key1": "value1",
 			"key2": "value2",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
 		assertKey(t, hub, "key1", "value1")
 		assertKey(t, hub, "key2", "value2")
@@ -97,7 +97,7 @@ func TestKeyList(t *testing.T) {
 		req, chn := client.MakeRequest(CmdListKeys, map[string]interface{}{
 			"prefix": "key",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		resp := mustSucceed(t, waitReply(t, chn))
 		data := resp.Data.([]interface{})
 		if len(data) != 2 {
@@ -113,7 +113,7 @@ func TestKeyGetBulk(t *testing.T) {
 		req, chn := client.MakeRequest(CmdReadBulk, map[string]interface{}{
 			"keys": []string{"key1", "key2"},
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		resp := mustSucceed(t, waitReply(t, chn))
 		// Check that reply is correct
 		values := resp.Data.(map[string]interface{})
@@ -130,7 +130,7 @@ func TestKeyGetPrefix(t *testing.T) {
 		req, chn := client.MakeRequest(CmdReadPrefix, map[string]interface{}{
 			"prefix": "key",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		resp := mustSucceed(t, waitReply(t, chn))
 		// Check that reply is correct
 		values := resp.Data.(map[string]interface{})
@@ -145,7 +145,7 @@ func TestKeyGetEmpty(t *testing.T) {
 		req, chn := client.MakeRequest(CmdReadKey, map[string]interface{}{
 			"key": "test",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		resp := mustSucceed(t, waitReply(t, chn))
 		// Check that reply is correct (empty)
 		if resp.Data.(string) != "" {
@@ -165,7 +165,7 @@ func TestErrorMissingParam(t *testing.T) {
 				req, chn := client.MakeRequest(cmd, map[string]interface{}{
 					"@dingus": "bogus",
 				})
-				hub.incoming <- req
+				hub.SendMessage(req)
 				resp := mustFail(t, waitReply(t, chn))
 				// Check that reply is correct (empty)
 				if resp.Error != ErrMissingParam {
@@ -191,7 +191,7 @@ func TestErrorWrongType(t *testing.T) {
 		t.Run(cmd+" with invalid key type", func(t *testing.T) {
 			makeHubClient(t, func(hub *Hub, client *LocalClient) {
 				req, chn := client.MakeRequest(cmd, data)
-				hub.incoming <- req
+				hub.SendMessage(req)
 				resp := mustFail(t, waitReply(t, chn))
 				// Check that reply is correct (empty)
 				if resp.Error != ErrMissingParam {
@@ -205,7 +205,7 @@ func TestErrorWrongType(t *testing.T) {
 	t.Run(CmdWriteBulk+" with invalid key type", func(t *testing.T) {
 		makeHubClient(t, func(hub *Hub, client *LocalClient) {
 			req, chn := client.MakeRequest(CmdWriteBulk, map[string]interface{}{"test": 1234})
-			hub.incoming <- req
+			hub.SendMessage(req)
 			resp := mustFail(t, waitReply(t, chn))
 			// Check that reply is correct (empty)
 			if resp.Error != ErrInvalidFmt {
@@ -278,7 +278,7 @@ func TestPrefixSubscription(t *testing.T) {
 		req, chn := client.MakeRequest(CmdSubscribePrefix, map[string]interface{}{
 			"prefix": "sub-",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
 
 		// Check that subscription is in database
@@ -293,15 +293,22 @@ func TestPrefixSubscription(t *testing.T) {
 			"key":  "sub-test-1234",
 			"data": "yo this is a new value!",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
+
+		// Check using callback (even though we can just use client.Pushes)
+		res := make(chan []string)
+		cid := client.SetPrefixSubCallback("sub-test-", func(key string, data string) {
+			res <- []string{key, data}
+		})
+		defer client.UnsetCallback(cid)
 
 		// Check for pushes
 		select {
 		case <-time.After(10 * time.Second):
 			t.Fatal("push took too long to arrive")
-		case push := <-client.Pushes:
-			if push.Key != "sub-test-1234" || push.NewValue != "yo this is a new value!" {
+		case push := <-res:
+			if len(push) < 2 || push[0] != "sub-test-1234" || push[1] != "yo this is a new value!" {
 				t.Fatal("wrong push received", push)
 			}
 		}
@@ -310,7 +317,7 @@ func TestPrefixSubscription(t *testing.T) {
 		req, chn = client.MakeRequest(CmdUnsubscribePrefix, map[string]interface{}{
 			"prefix": "sub-",
 		})
-		hub.incoming <- req
+		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
 
 		// Check that subscription is not in database anymore
@@ -347,7 +354,7 @@ func TestAuthentication(t *testing.T) {
 
 	// Make authentication request
 	req, chn := client.MakeRequest(CmdAuthRequest, map[string]interface{}{})
-	hub.incoming <- req
+	hub.SendMessage(req)
 	challenge := mustSucceed(t, waitReply(t, chn))
 	data := challenge.Data.(map[string]interface{})
 
@@ -370,7 +377,7 @@ func TestAuthentication(t *testing.T) {
 	req, chn = client.MakeRequest(CmdAuthChallenge, map[string]interface{}{
 		"hash": base64.StdEncoding.EncodeToString(hashBytes),
 	})
-	hub.incoming <- req
+	hub.SendMessage(req)
 
 	mustSucceed(t, waitReply(t, chn))
 
