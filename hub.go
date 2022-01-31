@@ -137,6 +137,10 @@ func (hub *Hub) RemoveClient(client Client) {
 	hub.unregister <- client
 }
 
+func (hub *Hub) SendMessage(msg Message) {
+	hub.incoming <- msg
+}
+
 // ServeWs is the legacy handler for WS
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	hub.createWebsocketClient(w, r, ClientOptions{})
