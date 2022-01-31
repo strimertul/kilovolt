@@ -231,6 +231,13 @@ func TestKeySubscription(t *testing.T) {
 			t.Fatal("subscribe failed, subscription not present")
 		}
 
+		// Check using callback (even though we can just use client.Pushes)
+		res := make(chan string)
+		cid := client.SetKeySubCallback("sub-test", func(key string, data string) {
+			res <- data
+		})
+		defer client.UnsetCallback(cid)
+
 		// Modify key
 		req, chn = client.MakeRequest(CmdWriteKey, map[string]interface{}{
 			"key":  "sub-test",
@@ -238,13 +245,6 @@ func TestKeySubscription(t *testing.T) {
 		})
 		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
-
-		// Check using callback (even though we can just use client.Pushes)
-		res := make(chan string)
-		cid := client.SetKeySubCallback("sub-test", func(key string, data string) {
-			res <- data
-		})
-		defer client.UnsetCallback(cid)
 
 		// Check for pushes
 		select {
@@ -281,6 +281,13 @@ func TestPrefixSubscription(t *testing.T) {
 		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
 
+		// Check using callback (even though we can just use client.Pushes)
+		res := make(chan []string)
+		cid := client.SetPrefixSubCallback("sub-test-", func(key string, data string) {
+			res <- []string{key, data}
+		})
+		defer client.UnsetCallback(cid)
+
 		// Check that subscription is in database
 		prefixedKey := client.options.Namespace + "sub-test-1234"
 		lst := hub.subscriptions.GetSubscribers(prefixedKey)
@@ -295,13 +302,6 @@ func TestPrefixSubscription(t *testing.T) {
 		})
 		hub.SendMessage(req)
 		mustSucceed(t, waitReply(t, chn))
-
-		// Check using callback (even though we can just use client.Pushes)
-		res := make(chan []string)
-		cid := client.SetPrefixSubCallback("sub-test-", func(key string, data string) {
-			res <- []string{key, data}
-		})
-		defer client.UnsetCallback(cid)
 
 		// Check for pushes
 		select {
