@@ -1,6 +1,6 @@
 package kv
 
-const ProtoVersion = "v7"
+const ProtoVersion = "v8"
 
 // Commands
 const (
@@ -10,6 +10,7 @@ const (
 	CmdReadPrefix        = "kget-all"
 	CmdWriteKey          = "kset"
 	CmdWriteBulk         = "kset-bulk"
+	CmdRemoveKey         = "kdel"
 	CmdSubscribeKey      = "ksub"
 	CmdSubscribePrefix   = "ksub-prefix"
 	CmdUnsubscribeKey    = "kunsub"

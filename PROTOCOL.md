@@ -2,7 +2,7 @@
 
 Kilovolt exposes a WebSocket server and speaks using text JSON messages.
 
-**Note:** This documentation pertains to Kilovolt protocol version `v7`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
+**Note:** This documentation pertains to Kilovolt protocol version `v8`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
 
 ## Message format
 
@@ -232,6 +232,10 @@ Response
 ```
 
 ### `kset-bulk` - Set multiple keys
+
+TODO
+
+### `kdel` - Remove key
 
 TODO
 

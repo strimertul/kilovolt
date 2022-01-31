@@ -18,6 +18,7 @@ var handlers = map[string]commandHandlerFn{
 	CmdReadPrefix:        cmdReadPrefix,
 	CmdWriteKey:          cmdWriteKey,
 	CmdWriteBulk:         cmdWriteBulk,
+	CmdRemoveKey:         cmdRemoveKey,
 	CmdSubscribeKey:      cmdSubscribeKey,
 	CmdUnsubscribeKey:    cmdUnsubscribeKey,
 	CmdSubscribePrefix:   cmdSubscribePrefix,
@@ -162,6 +163,34 @@ func cmdWriteKey(h *Hub, client Client, msg Request) {
 
 	h.subscriptions.KeyChanged(realKey, data)
 	h.logger.Debug("modified key", zap.Int64("client", client.UID()), zap.String("key", realKey))
+}
+
+func cmdRemoveKey(h *Hub, client Client, msg Request) {
+	if !requireAuth(h, client, msg) {
+		return
+	}
+
+	// Check params
+	key, ok := msg.Data["key"].(string)
+	if !ok {
+		sendErr(client, ErrMissingParam, "invalid or missing 'key' parameter", msg.RequestID)
+		return
+	}
+
+	// Remap key if necessary
+	options := client.Options()
+	realKey := options.Namespace + key
+
+	err := h.db.Delete(realKey)
+	if err != nil {
+		sendErr(client, ErrServerError, err.Error(), msg.RequestID)
+		return
+	}
+	// Send OK response
+	client.SendJSON(Response{"response", true, msg.RequestID, nil})
+
+	h.subscriptions.KeyChanged(realKey, "")
+	h.logger.Debug("removed key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 }
 
 func cmdWriteBulk(h *Hub, client Client, msg Request) {

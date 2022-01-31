@@ -50,6 +50,27 @@ func assertKey(t *testing.T, hub *Hub, key string, expected string) {
 	}
 }
 
+func TestKeyRemove(t *testing.T) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
+		req, chn := client.MakeRequest(CmdWriteKey, map[string]interface{}{
+			"key":  "test",
+			"data": "test-value",
+		})
+		hub.SendMessage(req)
+		mustSucceed(t, waitReply(t, chn))
+		assertKey(t, hub, "test", "test-value")
+		req, chn = client.MakeRequest(CmdRemoveKey, map[string]interface{}{
+			"key": "test",
+		})
+		hub.SendMessage(req)
+		mustSucceed(t, waitReply(t, chn))
+		val, err := hub.db.Get(test_namespace + "test")
+		if err != ErrorKeyNotFound {
+			t.Errorf("Key 'test' should be removed, but it is still there: %s", val)
+		}
+	})
+}
+
 func TestKeySet(t *testing.T) {
 	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 		req, chn := client.MakeRequest(CmdWriteKey, map[string]interface{}{
@@ -156,7 +177,7 @@ func TestKeyGetEmpty(t *testing.T) {
 
 func TestErrorMissingParam(t *testing.T) {
 	noParams := []string{
-		CmdReadKey, CmdReadBulk, CmdReadPrefix, CmdWriteKey,
+		CmdReadKey, CmdReadBulk, CmdReadPrefix, CmdWriteKey, CmdRemoveKey,
 		CmdSubscribeKey, CmdSubscribePrefix, CmdUnsubscribeKey, CmdUnsubscribePrefix,
 	}
 	for _, cmd := range noParams {
@@ -182,6 +203,7 @@ func TestErrorWrongType(t *testing.T) {
 		CmdReadBulk:          {"keys": 1234},
 		CmdReadPrefix:        {"prefix": 1234},
 		CmdWriteKey:          {"key": 1234, "data": 1234},
+		CmdRemoveKey:         {"key": 1234},
 		CmdSubscribeKey:      {"key": 1234},
 		CmdSubscribePrefix:   {"prefix": 1234},
 		CmdUnsubscribeKey:    {"key": 1234},
@@ -395,7 +417,7 @@ func waitReply(t *testing.T, chn <-chan interface{}) interface{} {
 	case response := <-chn:
 		return response
 	}
-	panic("unreacheable")
+	panic("unreachable")
 }
 
 func mustSucceed(t *testing.T, resp interface{}) Response {
@@ -407,7 +429,7 @@ func mustSucceed(t *testing.T, resp interface{}) Response {
 	default:
 		t.Fatalf("received unexpected type: %T", v)
 	}
-	panic("unreacheable")
+	panic("unreachable")
 }
 
 func mustFail(t *testing.T, resp interface{}) Error {
@@ -419,5 +441,5 @@ func mustFail(t *testing.T, resp interface{}) Error {
 	default:
 		t.Fatalf("received unexpected type: %T", v)
 	}
-	panic("unreacheable")
+	panic("unreachable")
 }
