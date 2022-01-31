@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	mrand "math/rand"
+	"net/http"
 
 	"go.uber.org/zap"
 
@@ -126,4 +127,36 @@ func (hub *Hub) Run() {
 			hub.handleCmd(message.Client, message)
 		}
 	}
+}
+
+func (hub *Hub) AddClient(client Client) {
+	hub.register <- client
+}
+
+func (hub *Hub) RemoveClient(client Client) {
+	hub.unregister <- client
+}
+
+// ServeWs is the legacy handler for WS
+func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+	hub.createWebsocketClient(w, r, ClientOptions{})
+}
+
+// CreateClient upgrades a HTTP request to websocket and makes it a client for the hub
+func (hub *Hub) createWebsocketClient(w http.ResponseWriter, r *http.Request, options ClientOptions) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		hub.logger.Error("error starting websocket session", zap.Error(err))
+		return
+	}
+	client := &WebsocketClient{
+		hub: hub, conn: conn,
+		send: make(chan []byte, 256), options: options,
+	}
+	client.hub.register <- client
+
+	// Allow collection of memory referenced by the caller by doing all work in
+	// new goroutines.
+	go client.writePump()
+	go client.readPump(hub)
 }

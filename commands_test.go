@@ -10,31 +10,34 @@ import (
 	"go.uber.org/zap"
 )
 
-func makeHubClient(t *testing.T, test func(hub *Hub, client *mockClient)) {
+const test_namespace = "@test/"
+
+func makeHubClient(t *testing.T, test func(hub *Hub, client *LocalClient)) {
 	log, _ := zap.NewDevelopment()
 	hub := createInMemoryHub(t, log)
 	defer hub.Close()
 	go hub.Run()
 
-	client := newMockClient(log)
+	client := NewLocalClient(ClientOptions{test_namespace}, log)
 	defer client.Close()
 	go client.Run()
 
-	hub.register <- client
+	hub.AddClient(client)
 	client.Wait()
+	defer hub.RemoveClient(client)
 
 	test(hub, client)
 }
 
 func prepareKey(t *testing.T, hub *Hub, key string, expected string) {
-	err := hub.db.Set("@test/"+key, expected)
+	err := hub.db.Set(test_namespace+key, expected)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func assertKey(t *testing.T, hub *Hub, key string, expected string) {
-	val, err := hub.db.Get("@test/" + key)
+	val, err := hub.db.Get(test_namespace + key)
 	if err != nil {
 		if err == ErrorKeyNotFound {
 			t.Errorf("Key '%s' not found", key)
@@ -48,7 +51,7 @@ func assertKey(t *testing.T, hub *Hub, key string, expected string) {
 }
 
 func TestKeySet(t *testing.T) {
-	makeHubClient(t, func(hub *Hub, client *mockClient) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 		req, chn := client.MakeRequest(CmdWriteKey, map[string]interface{}{
 			"key":  "test",
 			"data": "test-value",
@@ -60,7 +63,7 @@ func TestKeySet(t *testing.T) {
 }
 
 func TestKeyGet(t *testing.T) {
-	makeHubClient(t, func(hub *Hub, client *mockClient) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 		prepareKey(t, hub, "test", "test-value")
 		req, chn := client.MakeRequest(CmdReadKey, map[string]interface{}{
 			"key": "test",
@@ -75,7 +78,7 @@ func TestKeyGet(t *testing.T) {
 }
 
 func TestKeySetBulk(t *testing.T) {
-	makeHubClient(t, func(hub *Hub, client *mockClient) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 		req, chn := client.MakeRequest(CmdWriteBulk, map[string]interface{}{
 			"key1": "value1",
 			"key2": "value2",
@@ -88,7 +91,7 @@ func TestKeySetBulk(t *testing.T) {
 }
 
 func TestKeyList(t *testing.T) {
-	makeHubClient(t, func(hub *Hub, client *mockClient) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 		prepareKey(t, hub, "key1", "test-value")
 		prepareKey(t, hub, "key2", "test-value")
 		req, chn := client.MakeRequest(CmdListKeys, map[string]interface{}{
@@ -104,7 +107,7 @@ func TestKeyList(t *testing.T) {
 }
 
 func TestKeyGetBulk(t *testing.T) {
-	makeHubClient(t, func(hub *Hub, client *mockClient) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 		prepareKey(t, hub, "key1", "value1")
 		prepareKey(t, hub, "key2", "value2")
 		req, chn := client.MakeRequest(CmdReadBulk, map[string]interface{}{
@@ -121,7 +124,7 @@ func TestKeyGetBulk(t *testing.T) {
 }
 
 func TestKeyGetPrefix(t *testing.T) {
-	makeHubClient(t, func(hub *Hub, client *mockClient) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 		prepareKey(t, hub, "key1", "value1")
 		prepareKey(t, hub, "key2", "value2")
 		req, chn := client.MakeRequest(CmdReadPrefix, map[string]interface{}{
@@ -138,7 +141,7 @@ func TestKeyGetPrefix(t *testing.T) {
 }
 
 func TestKeyGetEmpty(t *testing.T) {
-	makeHubClient(t, func(hub *Hub, client *mockClient) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 		req, chn := client.MakeRequest(CmdReadKey, map[string]interface{}{
 			"key": "test",
 		})
@@ -158,7 +161,7 @@ func TestErrorMissingParam(t *testing.T) {
 	}
 	for _, cmd := range noParams {
 		t.Run(cmd+" with wrong key", func(t *testing.T) {
-			makeHubClient(t, func(hub *Hub, client *mockClient) {
+			makeHubClient(t, func(hub *Hub, client *LocalClient) {
 				req, chn := client.MakeRequest(cmd, map[string]interface{}{
 					"@dingus": "bogus",
 				})
@@ -186,7 +189,7 @@ func TestErrorWrongType(t *testing.T) {
 	}
 	for cmd, data := range wrongType {
 		t.Run(cmd+" with invalid key type", func(t *testing.T) {
-			makeHubClient(t, func(hub *Hub, client *mockClient) {
+			makeHubClient(t, func(hub *Hub, client *LocalClient) {
 				req, chn := client.MakeRequest(cmd, data)
 				hub.incoming <- req
 				resp := mustFail(t, waitReply(t, chn))
@@ -200,7 +203,7 @@ func TestErrorWrongType(t *testing.T) {
 
 	// kset-bulk is special, returns InvalidFmt on wrong format
 	t.Run(CmdWriteBulk+" with invalid key type", func(t *testing.T) {
-		makeHubClient(t, func(hub *Hub, client *mockClient) {
+		makeHubClient(t, func(hub *Hub, client *LocalClient) {
 			req, chn := client.MakeRequest(CmdWriteBulk, map[string]interface{}{"test": 1234})
 			hub.incoming <- req
 			resp := mustFail(t, waitReply(t, chn))
@@ -213,7 +216,7 @@ func TestErrorWrongType(t *testing.T) {
 }
 
 func TestKeySubscription(t *testing.T) {
-	makeHubClient(t, func(hub *Hub, client *mockClient) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 		// Subscribe to key
 		req, chn := client.MakeRequest(CmdSubscribeKey, map[string]interface{}{
 			"key": "sub-test",
@@ -262,7 +265,7 @@ func TestKeySubscription(t *testing.T) {
 }
 
 func TestPrefixSubscription(t *testing.T) {
-	makeHubClient(t, func(hub *Hub, client *mockClient) {
+	makeHubClient(t, func(hub *Hub, client *LocalClient) {
 
 		// Subscribe to key
 		req, chn := client.MakeRequest(CmdSubscribePrefix, map[string]interface{}{
@@ -322,12 +325,13 @@ func TestAuthentication(t *testing.T) {
 	defer hub.Close()
 	go hub.Run()
 
-	client := newMockClient(log)
+	client := NewLocalClient(ClientOptions{test_namespace}, log)
 	defer client.Close()
 	go client.Run()
 
-	hub.register <- client
+	hub.AddClient(client)
 	client.Wait()
+	defer hub.RemoveClient(client)
 
 	// Make sure client is not authenticated
 	if hub.clients.Authenticated(client.UID()) {

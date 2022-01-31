@@ -18,7 +18,7 @@ func TestHub(t *testing.T) {
 	// Run hub routines on a separate goroutine
 	go hub.Run()
 
-	client := newMockClient(log)
+	client := NewLocalClient(ClientOptions{test_namespace}, log)
 	t.Run("register client", func(t *testing.T) {
 		hub.register <- client
 		// Wait for hello or timeout
