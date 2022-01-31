@@ -12,7 +12,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 )
 
-type rawMessage struct {
+type Message struct {
 	Client Client
 	Data   []byte
 }
@@ -24,7 +24,7 @@ type HubOptions struct {
 type Hub struct {
 	options       HubOptions
 	clients       *clientList
-	incoming      chan rawMessage
+	incoming      chan Message
 	register      chan Client
 	unregister    chan Client
 	subscriptions *SubscriptionManager
@@ -45,7 +45,7 @@ func NewHub(db Driver, options HubOptions, logger *zap.Logger) (*Hub, error) {
 	subscriptions := makeSubscriptionManager()
 
 	hub := &Hub{
-		incoming:      make(chan rawMessage, 10),
+		incoming:      make(chan Message, 10),
 		register:      make(chan Client, 10),
 		unregister:    make(chan Client, 10),
 		clients:       clients,
@@ -67,7 +67,7 @@ func (hub *Hub) SetOptions(options HubOptions) {
 	hub.options = options
 }
 
-func (hub *Hub) handleCmd(client Client, message rawMessage) {
+func (hub *Hub) handleCmd(client Client, message Message) {
 	// Decode request
 	var msg Request
 	err := json.Unmarshal(message.Data, &msg)

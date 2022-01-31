@@ -71,7 +71,7 @@ func (c *WebsocketClient) readPump(hub *Hub) {
 			break
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		c.hub.incoming <- rawMessage{c, message}
+		c.hub.incoming <- Message{c, message}
 	}
 }
 

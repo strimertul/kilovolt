@@ -243,7 +243,7 @@ func TestKeySubscription(t *testing.T) {
 		select {
 		case <-time.After(10 * time.Second):
 			t.Fatal("push took too long to arrive")
-		case push := <-client.pushes:
+		case push := <-client.Pushes:
 			if push.Key != "sub-test" || push.NewValue != "yo this is a new value!" {
 				t.Fatal("wrong push received", push)
 			}
@@ -293,7 +293,7 @@ func TestPrefixSubscription(t *testing.T) {
 		select {
 		case <-time.After(10 * time.Second):
 			t.Fatal("push took too long to arrive")
-		case push := <-client.pushes:
+		case push := <-client.Pushes:
 			if push.Key != "sub-test-1234" || push.NewValue != "yo this is a new value!" {
 				t.Fatal("wrong push received", push)
 			}

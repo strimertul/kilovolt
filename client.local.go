@@ -17,7 +17,6 @@ type LocalClient struct {
 	send chan []byte
 
 	pending   map[string]chan interface{}
-	pushes    chan Push
 	responses chan Response
 
 	logger  *zap.Logger
@@ -25,6 +24,8 @@ type LocalClient struct {
 
 	mu    sync.Mutex
 	ready chan bool
+
+	Pushes chan Push
 }
 
 func NewLocalClient(options ClientOptions, log *zap.Logger) *LocalClient {
@@ -36,7 +37,7 @@ func NewLocalClient(options ClientOptions, log *zap.Logger) *LocalClient {
 		uid:       0,
 		send:      make(chan []byte),
 		pending:   make(map[string]chan interface{}),
-		pushes:    make(chan Push, 100),
+		Pushes:    make(chan Push, 100),
 		responses: make(chan Response, 100),
 		logger:    log,
 		options:   options,
@@ -88,7 +89,7 @@ func (m *LocalClient) Run() {
 					m.logger.Error("failed to unmarshal push", zap.Error(err))
 					continue
 				}
-				m.pushes <- push
+				m.Pushes <- push
 			case "hello":
 				m.ready <- true
 			}
@@ -100,7 +101,7 @@ func (c *LocalClient) Wait() {
 	<-c.ready
 }
 
-func (c *LocalClient) MakeRequest(cmd string, data map[string]interface{}) (rawMessage, <-chan interface{}) {
+func (c *LocalClient) MakeRequest(cmd string, data map[string]interface{}) (Message, <-chan interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var requestID string
@@ -119,7 +120,7 @@ func (c *LocalClient) MakeRequest(cmd string, data map[string]interface{}) (rawM
 		Data:      data,
 		RequestID: requestID,
 	})
-	return rawMessage{c, byt}, chn
+	return Message{c, byt}, chn
 }
 
 func (c *LocalClient) SetUID(uid int64) {
