@@ -54,7 +54,7 @@ func NewLocalClient(options ClientOptions, log *zap.Logger) *LocalClient {
 
 func (m *LocalClient) Run() {
 	for data := range m.send {
-		m.logger.Info("received from server", zap.String("data", string(data)))
+		m.logger.Debug("received from server", zap.String("data", string(data)))
 		var response Response
 		err := jsoniter.ConfigFastest.Unmarshal(data, &response)
 		if err != nil {
