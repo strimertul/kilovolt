@@ -137,6 +137,10 @@ func (hub *Hub) RemoveClient(client Client) {
 	hub.unregister <- client
 }
 
+func (hub *Hub) SetAuthenticated(id int64, authenticated bool) error {
+	return hub.clients.SetAuthenticated(id, authenticated)
+}
+
 func (hub *Hub) SendMessage(msg Message) {
 	hub.incoming <- msg
 }
