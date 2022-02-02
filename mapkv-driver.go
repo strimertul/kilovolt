@@ -61,7 +61,7 @@ func (b *mapkv) List(prefix string) ([]string, error) {
 			keys = append(keys, k)
 		}
 	}
-	sort.Sort(sort.StringSlice(keys))
+	sort.Strings(keys)
 	return keys, nil
 }
 
