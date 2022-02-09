@@ -147,11 +147,11 @@ func (hub *Hub) SendMessage(msg Message) {
 
 // ServeWs is the legacy handler for WS
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
-	hub.createWebsocketClient(w, r, ClientOptions{})
+	hub.CreateWebsocketClient(w, r, ClientOptions{})
 }
 
-// CreateClient upgrades a HTTP request to websocket and makes it a client for the hub
-func (hub *Hub) createWebsocketClient(w http.ResponseWriter, r *http.Request, options ClientOptions) {
+// CreateWebsocketClient upgrades a HTTP request to websocket and makes it a client for the hub
+func (hub *Hub) CreateWebsocketClient(w http.ResponseWriter, r *http.Request, options ClientOptions) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		hub.logger.Error("error starting websocket session", zap.Error(err))
