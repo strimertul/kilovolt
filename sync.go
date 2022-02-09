@@ -23,19 +23,19 @@ type clientData struct {
 
 type clientList struct {
 	data map[int64]clientData
-	mu   sync.Mutex
+	mu   sync.RWMutex
 }
 
 func newClientList() *clientList {
 	return &clientList{
 		data: make(map[int64]clientData),
-		mu:   sync.Mutex{},
+		mu:   sync.RWMutex{},
 	}
 }
 
 func (c *clientList) GetByID(id int64) (Client, bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	cl, ok := c.data[id]
 	return cl.client, ok
 }
@@ -69,15 +69,15 @@ func (c *clientList) RemoveClient(client Client) {
 }
 
 func (c *clientList) Has(client Client) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	_, ok := c.data[client.UID()]
 	return ok
 }
 
 func (c *clientList) Clients() []Client {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	clients := []Client{}
 	for _, cl := range c.data {
 		clients = append(clients, cl.client)
@@ -100,8 +100,8 @@ func (c *clientList) SetChallenge(id int64, challenge authChallenge) error {
 }
 
 func (c *clientList) Challenge(id int64) (authChallenge, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	data, ok := c.data[id]
 	if !ok {
 		return authChallenge{}, ErrClientNotFound
@@ -125,8 +125,8 @@ func (c *clientList) SetAuthenticated(id int64, authenticated bool) error {
 }
 
 func (c *clientList) Authenticated(id int64) bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	data, ok := c.data[id]
 	if !ok {
 		return false

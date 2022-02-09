@@ -61,51 +61,56 @@ func (m *LocalClient) Run() {
 			m.logger.Error("failed to unmarshal response", zap.Error(err))
 			continue
 		}
+
 		// Check message
 		if response.RequestID != "" {
-			m.mu.Lock()
-			// Get related channel
-			chn, ok := m.pending[response.RequestID]
-			if !ok {
-				// Send to generic responses I guess??
-				m.responses <- response
-			} else {
-				if response.Ok {
-					chn <- response
+			func() {
+				m.mu.Lock()
+				defer m.mu.Unlock()
+
+				// Get related channel
+				chn, ok := m.pending[response.RequestID]
+				if !ok {
+					// Send to generic responses I guess??
+					m.responses <- response
 				} else {
-					// Must be an error, re-parse correctly
-					var err Error
-					parseerr := jsoniter.ConfigFastest.Unmarshal(data, &err)
-					if parseerr != nil {
-						m.logger.Error("failed to unmarshal data", zap.Error(parseerr))
-						continue
+					if response.Ok {
+						chn <- response
+					} else {
+						// Must be an error, re-parse correctly
+						var err Error
+						parseerr := jsoniter.ConfigFastest.Unmarshal(data, &err)
+						if parseerr != nil {
+							m.logger.Error("failed to unmarshal data", zap.Error(parseerr))
+							return
+						}
+						chn <- err
 					}
-					chn <- err
+					delete(m.pending, response.RequestID)
 				}
-				delete(m.pending, response.RequestID)
+			}()
+			continue
+		}
+
+		// Might be a push
+		switch response.CmdType {
+		case "push":
+			var push Push
+			err = jsoniter.ConfigFastest.Unmarshal(data, &push)
+			if err != nil {
+				m.logger.Error("failed to unmarshal push", zap.Error(err))
+				continue
 			}
-			m.mu.Unlock()
-		} else {
-			// Might be a push
-			switch response.CmdType {
-			case "push":
-				var push Push
-				err = jsoniter.ConfigFastest.Unmarshal(data, &push)
-				if err != nil {
-					m.logger.Error("failed to unmarshal push", zap.Error(err))
-					continue
+			subscriberIds := m.subscriptions.GetSubscribers(push.Key)
+			for _, subscriberId := range subscriberIds {
+				callback, ok := m.callbacks[subscriberId]
+				if ok {
+					callback(push.Key, push.NewValue)
 				}
-				subscriberIds := m.subscriptions.GetSubscribers(push.Key)
-				for _, subscriberId := range subscriberIds {
-					callback, ok := m.callbacks[subscriberId]
-					if ok {
-						callback(push.Key, push.NewValue)
-					}
-				}
-				m.Pushes <- push
-			case "hello":
-				m.ready <- true
 			}
+			m.Pushes <- push
+		case "hello":
+			m.ready <- true
 		}
 	}
 }
