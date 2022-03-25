@@ -105,7 +105,7 @@ func (m *LocalClient) Run() {
 			for _, subscriberId := range subscriberIds {
 				callback, ok := m.callbacks[subscriberId]
 				if ok {
-					callback(push.Key, push.NewValue)
+					go callback(push.Key, push.NewValue)
 				}
 			}
 			m.Pushes <- push
@@ -156,7 +156,7 @@ func (c *LocalClient) SetKeySubCallback(key string, callback SubscriptionCallbac
 	defer c.mu.Unlock()
 	// Generate random, unused ID
 	id := c.createCallback(callback)
-	go c.subscriptions.SubscribeKey(id, key)
+	c.subscriptions.SubscribeKey(id, key)
 	return id
 }
 
@@ -165,7 +165,7 @@ func (c *LocalClient) SetPrefixSubCallback(key string, callback SubscriptionCall
 	defer c.mu.Unlock()
 	// Generate random, unused ID
 	id := c.createCallback(callback)
-	go c.subscriptions.SubscribePrefix(id, key)
+	c.subscriptions.SubscribePrefix(id, key)
 	return id
 }
 
