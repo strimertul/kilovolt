@@ -94,7 +94,7 @@ func (hub *Hub) randomBytes() []byte {
 	if err != nil {
 		hub.logger.Warn("failed to generate secure bytes, falling back to insecure PRNG", zap.Error(err))
 		insecureBytes := make([]byte, 8)
-		binary.LittleEndian.PutUint64(insecureBytes, mrand.Uint64())
+		binary.LittleEndian.PutUint64(insecureBytes, mrand.Uint64()) //nolint:gosec
 		return insecureBytes
 	}
 	return saltBytes

@@ -156,7 +156,7 @@ func (c *LocalClient) SetKeySubCallback(key string, callback SubscriptionCallbac
 	defer c.mu.Unlock()
 	// Generate random, unused ID
 	id := c.createCallback(callback)
-	c.subscriptions.SubscribeKey(id, key)
+	go c.subscriptions.SubscribeKey(id, key)
 	return id
 }
 
@@ -165,7 +165,7 @@ func (c *LocalClient) SetPrefixSubCallback(key string, callback SubscriptionCall
 	defer c.mu.Unlock()
 	// Generate random, unused ID
 	id := c.createCallback(callback)
-	c.subscriptions.SubscribePrefix(id, key)
+	go c.subscriptions.SubscribePrefix(id, key)
 	return id
 }
 
