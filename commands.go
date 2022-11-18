@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"strconv"
 
 	"go.uber.org/zap"
 )
@@ -320,7 +321,7 @@ func cmdProtoVersion(_ *Hub, client Client, msg Request) {
 }
 
 func cmdInternalClientID(_ *Hub, client Client, msg Request) {
-	client.SendJSON(Response{"response", true, msg.RequestID, client.UID()})
+	client.SendJSON(Response{"response", true, msg.RequestID, strconv.FormatInt(client.UID(), 10)})
 }
 
 func cmdListKeys(h *Hub, client Client, msg Request) {

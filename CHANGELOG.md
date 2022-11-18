@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.0.1] - 2022-11-18
+
+### Changed
+
+- "_uid" now returns the ID as a string to prevent rounding errors in JSON parsers
+
 ## [9.0.0] - 2022-11-18
 
 New Protocol version (`v9`)
@@ -46,7 +52,8 @@ New protocol version (`v8`)
 
 - Added `kdel` to delete keys
 
-[current]: https://github.com/strimertul/kilovolt/compare/v9.0.0...HEAD
+[current]: https://github.com/strimertul/kilovolt/compare/v9.0.1...HEAD
+[9.0.1]: https://github.com/strimertul/kilovolt/compare/v9.0.0...v9.0.1
 [9.0.0]: https://github.com/strimertul/kilovolt/compare/v8.0.5...v9.0.0
 [8.0.5]: https://github.com/strimertul/kilovolt/compare/v8.0.4...v8.0.5
 [8.0.4]: https://github.com/strimertul/kilovolt/compare/v8.0.3...v8.0.4

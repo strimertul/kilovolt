@@ -389,7 +389,7 @@ Response
 
 ## Internal commands
 
-These commands are used in special occasions (like custom authentication systems)
+These commands are used in special occasions (like custom authentication systems). The schema for these commands can be quite unstable!
 
 
 ### `_uid` - Get internal client ID
@@ -410,7 +410,7 @@ Response
 {
   "type": "response",
   "ok": true,
-  "data": 42
+  "data": "42"
 }
 ```
 
