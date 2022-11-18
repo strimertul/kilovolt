@@ -1,6 +1,6 @@
 package kv
 
-const ProtoVersion = "v8"
+const ProtoVersion = "v9"
 
 // Commands
 const (
@@ -18,6 +18,7 @@ const (
 	CmdListKeys          = "klist"
 	CmdAuthRequest       = "klogin"
 	CmdAuthChallenge     = "kauth"
+	CmdInternalClientID  = "_uid"
 )
 
 type ErrCode string

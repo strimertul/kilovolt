@@ -27,6 +27,7 @@ var handlers = map[string]commandHandlerFn{
 	CmdListKeys:          cmdListKeys,
 	CmdAuthRequest:       cmdAuthRequest,
 	CmdAuthChallenge:     cmdAuthChallenge,
+	CmdInternalClientID:  cmdInternalClientID,
 }
 
 func cmdReadKey(h *Hub, client Client, msg Request) {
@@ -288,7 +289,6 @@ func cmdUnsubscribeKey(h *Hub, client Client, msg Request) {
 	h.logger.Debug("unsubscribed to key", zap.Int64("client", client.UID()), zap.String("key", realKey))
 	// Send OK response
 	client.SendJSON(Response{"response", true, msg.RequestID, nil})
-
 }
 
 func cmdUnsubscribePrefix(h *Hub, client Client, msg Request) {
@@ -317,6 +317,10 @@ func cmdUnsubscribePrefix(h *Hub, client Client, msg Request) {
 
 func cmdProtoVersion(_ *Hub, client Client, msg Request) {
 	client.SendJSON(Response{"response", true, msg.RequestID, ProtoVersion})
+}
+
+func cmdInternalClientID(_ *Hub, client Client, msg Request) {
+	client.SendJSON(Response{"response", true, msg.RequestID, client.UID()})
 }
 
 func cmdListKeys(h *Hub, client Client, msg Request) {

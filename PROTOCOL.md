@@ -2,7 +2,7 @@
 
 Kilovolt exposes a WebSocket server and speaks using text JSON messages.
 
-**Note:** This documentation pertains to Kilovolt protocol version `v8`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
+**Note:** This documentation pertains to Kilovolt protocol version `v9`! If you are coming from previous versions, check the [migration notes](MIGRATION.md).
 
 ## Message format
 
@@ -384,6 +384,33 @@ Response
   "type": "response",
   "ok": true,
   "data": ["key1", "key2"]
+}
+```
+
+## Internal commands
+
+These commands are used in special occasions (like custom authentication systems)
+
+
+### `_uid` - Get internal client ID
+
+Gets the internal client ID (e.g. for setting authentication status externally)
+
+#### Example
+
+Request
+
+```json
+{ "command": "_uid" }
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true,
+  "data": 42
 }
 ```
 
