@@ -206,13 +206,86 @@ Response
 
 ### `kget-bulk` - Get multiple keys
 
-TODO
+Read multiple keys from database, this will return an array of values, with empty string in places of keys that are not found
+
+Required data:
+
+| Parameter | Description  |
+| --------- | ------------ |
+| keys      | Keys to read |
+
+`keys` must be provided as an array of strings.
+
+#### Example
+
+Request
+
+```json
+{
+  "command": "kget-bulk",
+  "data": {
+    "keys": ["first-key", "second-key"]
+  }
+}
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true,
+  "data": {
+    "first-key": "test",
+    "second-key": "other"
+  }
+}
+```
 
 ### `kget-all` - Get all keys with given prefix
 
-TODO
+Read every key from database with a given prefix.
+
+Required data:
+
+| Parameter | Description |
+| --------- | ----------- |
+| prefix    | Key prefix  |
+
+#### Example
+
+Request
+
+```json
+{
+  "command": "kget-all",
+  "data": {
+    "prefix": "commonprefix"
+  }
+}
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true,
+  "data": {
+    "commonprefixa": "test",
+    "commonprefixb": "other"
+  }
+}
+```
 
 ### `kset` - Set key
+
+Write string value to key
+
+| Parameter | Description    |
+| --------- | -------------- |
+| key       | Key to write   |
+| data      | Value to write |
 
 #### Example
 
@@ -233,11 +306,57 @@ Response
 
 ### `kset-bulk` - Set multiple keys
 
-TODO
+Write multiple keys at once, instead of parameters, the `data` object is a map of keys and their new values.
+
+#### Example
+
+Request
+
+```json
+{
+  "command": "kset-bulk",
+  "data": {
+    "first-key": "one",
+    "second-key": "two"
+  }
+}
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true
+}
+```
 
 ### `kdel` - Remove key
 
-TODO
+Remove key from database. This will remove it from prefix search and return an empty string when trying to read it directly.
+
+Required data:
+
+| Parameter | Description   |
+| --------- | ------------- |
+| key       | Key to delete |
+
+#### Example
+
+Request
+
+```json
+{ "command": "kdel", "data": { "key": "my-key" } }
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true
+}
+```
 
 ### `ksub` - Subscribe to key
 
@@ -390,7 +509,6 @@ Response
 ## Internal commands
 
 These commands are used in special occasions (like custom authentication systems). The schema for these commands can be quite unstable!
-
 
 ### `_uid` - Get internal client ID
 
