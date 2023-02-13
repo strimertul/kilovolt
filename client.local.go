@@ -28,8 +28,6 @@ type LocalClient struct {
 
 	mu    sync.Mutex
 	ready chan bool
-
-	Pushes chan Push
 }
 
 func NewLocalClient(options ClientOptions, log *zap.Logger) *LocalClient {
@@ -43,7 +41,6 @@ func NewLocalClient(options ClientOptions, log *zap.Logger) *LocalClient {
 		subscriptions: makeSubscriptionManager(),
 		callbacks:     make(map[int64]SubscriptionCallback),
 		pending:       make(map[string]chan interface{}),
-		Pushes:        make(chan Push, 100),
 		responses:     make(chan Response, 100),
 		logger:        log,
 		options:       options,
@@ -71,23 +68,24 @@ func (m *LocalClient) Run() {
 				// Get related channel
 				chn, ok := m.pending[response.RequestID]
 				if !ok {
-					// Send to generic responses I guess??
-					m.responses <- response
-				} else {
-					if response.Ok {
-						chn <- response
-					} else {
-						// Must be an error, re-parse correctly
-						var err Error
-						parseerr := jsoniter.ConfigFastest.Unmarshal(data, &err)
-						if parseerr != nil {
-							m.logger.Error("failed to unmarshal data", zap.Error(parseerr))
-							return
-						}
-						chn <- err
-					}
-					delete(m.pending, response.RequestID)
+					m.logger.Warn("received response for an unmatched request", zap.String("request-id", response.RequestID))
+					return
 				}
+				defer delete(m.pending, response.RequestID)
+
+				if response.Ok {
+					chn <- response
+					return
+				}
+
+				// Must be an error, reparse correctly
+				var err Error
+				parseErr := jsoniter.ConfigFastest.Unmarshal(data, &err)
+				if parseErr != nil {
+					m.logger.Error("failed to unmarshal data", zap.Error(parseErr))
+					return
+				}
+				chn <- err
 			}()
 			continue
 		}
@@ -108,7 +106,6 @@ func (m *LocalClient) Run() {
 					go callback(push.Key, push.NewValue)
 				}
 			}
-			m.Pushes <- push
 		case "hello":
 			m.ready <- true
 		}
