@@ -6,9 +6,7 @@ import (
 	"sync"
 )
 
-var (
-	ErrClientNotFound = errors.New("client not found")
-)
+var ErrClientNotFound = errors.New("client not found")
 
 type authChallenge struct {
 	Challenge []byte

@@ -6,13 +6,13 @@ type Client interface {
 	Close()
 
 	SendMessage([]byte)
-	SendJSON(interface{})
+	SendJSON(any)
 
 	SetUID(int64)
 	UID() int64
 }
 
-// ClientOptions is a list of tweakable options for clients
+// ClientOptions is a list of tunable options for clients
 type ClientOptions struct {
 	// Adds a prefix to all key operations to restrict them to a namespace
 	Namespace string

@@ -27,7 +27,7 @@ type LocalClient struct {
 	options ClientOptions
 
 	mu    sync.Mutex
-	ready chan bool
+	ready sync.WaitGroup
 }
 
 func NewLocalClient(options ClientOptions, log *zap.Logger) *LocalClient {
@@ -35,43 +35,47 @@ func NewLocalClient(options ClientOptions, log *zap.Logger) *LocalClient {
 		log, _ = zap.NewProduction()
 	}
 
-	return &LocalClient{
+	client := &LocalClient{
 		uid:           0,
 		send:          make(chan []byte),
 		subscriptions: makeSubscriptionManager(),
 		callbacks:     make(map[int64]SubscriptionCallback),
-		pending:       make(map[string]chan interface{}),
+		pending:       make(map[string]chan any),
 		responses:     make(chan Response, 100),
 		logger:        log,
 		options:       options,
 		mu:            sync.Mutex{},
-		ready:         make(chan bool),
+		ready:         sync.WaitGroup{},
 	}
+
+	client.ready.Add(1)
+
+	return client
 }
 
-func (m *LocalClient) Run() {
-	for data := range m.send {
-		m.logger.Debug("received from server", zap.String("data", string(data)))
+func (c *LocalClient) Run() {
+	for data := range c.send {
+		c.logger.Debug("received from server", zap.String("data", string(data)))
 		var response Response
 		err := jsoniter.ConfigFastest.Unmarshal(data, &response)
 		if err != nil {
-			m.logger.Error("failed to unmarshal response", zap.Error(err))
+			c.logger.Error("failed to unmarshal response", zap.Error(err))
 			continue
 		}
 
 		// Check message
 		if response.RequestID != "" {
 			func() {
-				m.mu.Lock()
-				defer m.mu.Unlock()
+				c.mu.Lock()
+				defer c.mu.Unlock()
 
 				// Get related channel
-				chn, ok := m.pending[response.RequestID]
+				chn, ok := c.pending[response.RequestID]
 				if !ok {
-					m.logger.Warn("received response for an unmatched request", zap.String("request-id", response.RequestID))
+					c.logger.Warn("received response for an unmatched request", zap.String("request-id", response.RequestID))
 					return
 				}
-				defer delete(m.pending, response.RequestID)
+				defer delete(c.pending, response.RequestID)
 
 				if response.Ok {
 					chn <- response
@@ -82,7 +86,7 @@ func (m *LocalClient) Run() {
 				var err Error
 				parseErr := jsoniter.ConfigFastest.Unmarshal(data, &err)
 				if parseErr != nil {
-					m.logger.Error("failed to unmarshal data", zap.Error(parseErr))
+					c.logger.Error("failed to unmarshal data", zap.Error(parseErr))
 					return
 				}
 				chn <- err
@@ -96,27 +100,27 @@ func (m *LocalClient) Run() {
 			var push Push
 			err = jsoniter.ConfigFastest.Unmarshal(data, &push)
 			if err != nil {
-				m.logger.Error("failed to unmarshal push", zap.Error(err))
+				c.logger.Error("failed to unmarshal push", zap.Error(err))
 				continue
 			}
-			subscriberIds := m.subscriptions.GetSubscribers(push.Key)
+			subscriberIds := c.subscriptions.GetSubscribers(push.Key)
 			for _, subscriberId := range subscriberIds {
-				callback, ok := m.callbacks[subscriberId]
+				callback, ok := c.callbacks[subscriberId]
 				if ok {
 					go callback(push.Key, push.NewValue)
 				}
 			}
 		case "hello":
-			m.ready <- true
+			c.ready.Done()
 		}
 	}
 }
 
 func (c *LocalClient) Wait() {
-	<-c.ready
+	c.ready.Wait()
 }
 
-func (c *LocalClient) MakeRequest(cmd string, data map[string]interface{}) (Message, <-chan interface{}) {
+func (c *LocalClient) MakeRequest(cmd string, data map[string]any) (Message, <-chan any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var requestID string
@@ -128,7 +132,7 @@ func (c *LocalClient) MakeRequest(cmd string, data map[string]interface{}) (Mess
 			break
 		}
 	}
-	chn := make(chan interface{}, 10)
+	chn := make(chan any, 10)
 	c.pending[requestID] = chn
 	byt, _ := json.Marshal(Request{
 		CmdName:   cmd,
@@ -185,7 +189,7 @@ func (c *LocalClient) UID() int64 {
 	return c.uid
 }
 
-func (c *LocalClient) SendJSON(data interface{}) {
+func (c *LocalClient) SendJSON(data any) {
 	msg, _ := json.Marshal(data)
 	c.send <- msg
 }

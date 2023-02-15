@@ -129,7 +129,7 @@ func (c *WebsocketClient) UID() int64 {
 	return c.uid
 }
 
-func (c *WebsocketClient) SendJSON(data interface{}) {
+func (c *WebsocketClient) SendJSON(data any) {
 	msg, _ := json.Marshal(data)
 	c.send <- msg
 }
