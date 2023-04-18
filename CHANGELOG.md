@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [10.0.0] - 2023-04-18
+
+### Added
+
+- New authentication method: interactive/"ask", check PROTOCOL.md for an overview.
+
+### Changed
+
+- Calling `klogin` when authentication is not required will now return a `authentication not required` error
+
 ## [9.1.0] - 2023-02-13
 
 ### Fixed
@@ -58,7 +68,9 @@ New protocol version (`v8`)
 
 - Added `kdel` to delete keys
 
-[current]: https://github.com/strimertul/kilovolt/compare/v9.0.1...HEAD
+[current]: https://github.com/strimertul/kilovolt/compare/v10.0.0...HEAD
+[10.0.0]: https://github.com/strimertul/kilovolt/compare/v9.1.0...v10.0.0
+[9.1.0]: https://github.com/strimertul/kilovolt/compare/v9.0.1...v9.1.0
 [9.0.1]: https://github.com/strimertul/kilovolt/compare/v9.0.0...v9.0.1
 [9.0.0]: https://github.com/strimertul/kilovolt/compare/v8.0.5...v9.0.0
 [8.0.5]: https://github.com/strimertul/kilovolt/compare/v8.0.4...v8.0.5
