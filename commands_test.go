@@ -295,7 +295,6 @@ func TestKeySubscription(t *testing.T) {
 
 func TestPrefixSubscription(t *testing.T) {
 	makeHubClient(t, func(hub *Hub, client *LocalClient) {
-
 		// Subscribe to key
 		req, chn := client.MakeRequest(CmdSubscribePrefix, map[string]interface{}{
 			"prefix": "sub-",
@@ -348,10 +347,9 @@ func TestPrefixSubscription(t *testing.T) {
 			t.Fatal("unsubscribe failed, subscription still present")
 		}
 	})
-
 }
 
-func TestAuthentication(t *testing.T) {
+func TestChallengeAuthentication(t *testing.T) {
 	const password = "test"
 
 	log, _ := zap.NewDevelopment()
@@ -374,7 +372,7 @@ func TestAuthentication(t *testing.T) {
 		t.Fatal("client just connected and is already considered authenticated")
 	}
 
-	// Make authentication request
+	// Make authentication request using password
 	req, chn := client.MakeRequest(CmdAuthRequest, map[string]interface{}{})
 	hub.SendMessage(req)
 	challenge := mustSucceed(t, waitReply(t, chn))
@@ -401,6 +399,43 @@ func TestAuthentication(t *testing.T) {
 	})
 	hub.SendMessage(req)
 
+	mustSucceed(t, waitReply(t, chn))
+
+	// Make sure client is authenticated now
+	if !hub.clients.Authenticated(client.UID()) {
+		t.Fatal("client just authenticated but considered not authenticated")
+	}
+}
+
+func TestInteractiveAuthentication(t *testing.T) {
+	log, _ := zap.NewDevelopment()
+
+	hub := createInMemoryHub(t, log)
+	hub.SetOptions(HubOptions{})
+	hub.UseInteractiveAuth(func(client Client, message map[string]interface{}) bool {
+		return true
+	})
+	defer hub.Close()
+	go hub.Run()
+
+	client := NewLocalClient(ClientOptions{test_namespace}, log)
+	defer client.Close()
+	go client.Run()
+
+	hub.AddClient(client)
+	client.Wait()
+	defer hub.RemoveClient(client)
+
+	// Make sure client is not authenticated
+	if hub.clients.Authenticated(client.UID()) {
+		t.Fatal("client just connected and is already considered authenticated")
+	}
+
+	// Make authentication request using password
+	req, chn := client.MakeRequest(CmdAuthRequest, map[string]interface{}{
+		"auth": AuthTypeInteractive,
+	})
+	hub.SendMessage(req)
 	mustSucceed(t, waitReply(t, chn))
 
 	// Make sure client is authenticated now

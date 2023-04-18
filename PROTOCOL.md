@@ -87,9 +87,13 @@ Check below for a list of all error codes.
 
 ## Authentication
 
-As a websocket server, Kilovolt servers are accessible from any webpage you might visit and any process open in your computer. To protect from unauthorized access, Kilovolt supports setting an optional password and making client go through an authentication phase before any command can be called (except for informative ones like `version`).
+As a websocket server, Kilovolt servers are accessible from any webpage you might visit and any process open in your computer. To protect from unauthorized access, Kilovolt supports multiple authentication systems like setting an optional password and making client go through an authentication phase before any command can be called (except for informative ones like `version`).
 
-Authentication is performed in two steps:
+### Using a password (Challenge auth)
+
+Challenge authentication is a non-interactive authentication method that uses a shared password. The password is never transmitted but is instead used to cryptographically solve a challenge to prove the authenticating side knows the correct value.
+
+Challenge-based authentication is performed in two steps:
 
 - The client sends a `klogin`, asking for authentication. The server replies with a challenge and a salt.
 - The client encodes the HMAC-SHA256 of the challenge using the password and the salt, and sends it back using the `kauth` command.
@@ -99,9 +103,21 @@ Both challenge, salt and resulting hash are encoded using base64.
 This is what the flow should look like:
 
 ```
-Client: klogin {}
+Client: klogin { auth: "challenge" }
 Server: response { challenge: "MC45NDU0NTU2MDk3ODI2OTU1", salt: "MTIyLjI5MzkzMzQ0MjczMDA3" }
 Client: kauth { hash: base64_encode(HMAC-SHA256(base64_decode(challenge), (password + base64_decode(salt)))) }
+Server: response { ok: true }
+```
+
+### Asking the user (Interactive auth)
+
+The interactive authentication method allows user facing application to access Kilovolt without having to ask for a password. This method requires server applications to have a method to ask the user for consent. When implemented, the client application just needs to use the proper auth method in the `klogin` request and the server will either return an OK message or an error.
+
+The data object is considered to be extensible (i.e. not contain only the "auth" key) so depending on server implementation extra parameters may be provided to provide a clearer authentication flow to the end user.
+
+```
+Client: klogin { auth: "ask" }
+Server: <calls the predefined callback, which shows a dialog to the user, asking for authorization>
 Server: response { ok: true }
 ```
 
@@ -131,12 +147,19 @@ Response
 
 ### `klogin` - Generate authentication challenge
 
+Initiates authentication. This command returns an error if the kilovolt server does not require authentication or if the requested authentication method is not supported.
+
+#### Use method #1: Challenge based auth
+
 Generates a challenge to authenticate clients.
 
 Request
 
 ```json
-{ "command": "klogin" }
+{
+  "command": "klogin",
+  "data": { "auth": "challenge" }
+}
 ```
 
 Response
@@ -149,6 +172,28 @@ Response
     "challenge": "z9hUVNfu1rQJw1VWGYUjrkj2KCla2pI5YKVMqqQPZ1A=",
     "salt": "CFs4DalF5p4L0cxbhK3eQm8mFUmsqWJtY/paN/Df2ZU="
   }
+}
+```
+
+#### Use method #2: Interactive auth
+
+Use interactive authentication (this might take a while, since it depends on the user accepting a prompt).
+
+Request
+
+```json
+{
+  "command": "klogin",
+  "data": { "auth": "ask" }
+}
+```
+
+Response
+
+```json
+{
+  "type": "response",
+  "ok": true
 }
 ```
 

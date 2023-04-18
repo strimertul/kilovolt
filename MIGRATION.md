@@ -9,3 +9,7 @@
 
 - API changed significantly, support for multiple DB backends.
 - Logging library changed to logrus to zap.
+
+## v10
+
+- Calling `klogin` when authentication is not required will now return a `authentication not required` error

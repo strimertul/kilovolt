@@ -24,13 +24,22 @@ const (
 type ErrCode string
 
 const (
-	ErrServerError  = "server error"
-	ErrInvalidFmt   = "invalid message format"
-	ErrMissingParam = "required parameter missing"
-	ErrUnknownCmd   = "unknown command"
-	ErrAuthNotInit  = "authentication not initialized"
-	ErrAuthFailed   = "authentication failed"
-	ErrAuthRequired = "authentication required"
+	ErrServerError      ErrCode = "server error"
+	ErrInvalidFmt       ErrCode = "invalid message format"
+	ErrMissingParam     ErrCode = "required parameter missing"
+	ErrUnknownCmd       ErrCode = "unknown command"
+	ErrAuthNotInit      ErrCode = "authentication not initialized"
+	ErrAuthFailed       ErrCode = "authentication failed"
+	ErrAuthRequired     ErrCode = "authentication required"
+	ErrAuthNotRequired  ErrCode = "authentication not required"
+	ErrAuthNotSupported ErrCode = "authentication method not supported"
+)
+
+type AuthType string
+
+const (
+	AuthTypeChallenge   AuthType = "challenge"
+	AuthTypeInteractive AuthType = "ask"
 )
 
 type Request struct {

@@ -21,6 +21,8 @@ type HubOptions struct {
 	Password string
 }
 
+type InteractiveFn func(client Client, message map[string]interface{}) bool
+
 type Hub struct {
 	options       HubOptions
 	clients       *clientList
@@ -28,6 +30,7 @@ type Hub struct {
 	register      chan Client
 	unregister    chan Client
 	subscriptions *subscriptionManager
+	interactiveFn InteractiveFn
 
 	db Driver
 
@@ -137,6 +140,10 @@ func (hub *Hub) RemoveClient(client Client) {
 	hub.unregister <- client
 }
 
+func (hub *Hub) UseInteractiveAuth(fn InteractiveFn) {
+	hub.interactiveFn = fn
+}
+
 func (hub *Hub) SetAuthenticated(id int64, authenticated bool) error {
 	return hub.clients.SetAuthenticated(id, authenticated)
 }
@@ -167,4 +174,8 @@ func (hub *Hub) CreateWebsocketClient(w http.ResponseWriter, r *http.Request, op
 	// new goroutines.
 	go client.writePump()
 	go client.readPump(hub)
+}
+
+func (hub *Hub) authRequired() bool {
+	return hub.options.Password != "" || hub.interactiveFn != nil
 }

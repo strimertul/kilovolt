@@ -354,6 +354,43 @@ func cmdListKeys(h *Hub, client Client, msg Request) {
 }
 
 func cmdAuthRequest(h *Hub, client Client, msg Request) {
+	if h.authRequired() == false {
+		sendErr(client, ErrAuthNotRequired, "authentication is not required", msg.RequestID)
+		return
+	}
+
+	challengeType := AuthTypeChallenge
+	if msg.Data != nil {
+		// Read requested challenge type
+		challengeTypeRaw, ok := msg.Data["auth"]
+		if ok {
+			challengeTypeStr, ok := challengeTypeRaw.(string)
+			challengeType = AuthType(challengeTypeStr)
+			if !ok || challengeType != AuthTypeChallenge && challengeType != AuthTypeInteractive {
+				sendErr(client, ErrInvalidFmt, "invalid 'auth' parameter", msg.RequestID)
+				return
+			}
+		}
+	}
+
+	switch challengeType {
+	case AuthTypeChallenge:
+		if h.options.Password == "" {
+			sendErr(client, ErrAuthNotSupported, "challenge auth not available", msg.RequestID)
+			return
+		}
+		sendChallenge(h, client, msg)
+	case AuthTypeInteractive:
+		if h.interactiveFn == nil {
+			sendErr(client, ErrAuthNotSupported, "interactive auth not available", msg.RequestID)
+			return
+		}
+		// This can take forever, so run in a goroutine
+		go sendInteractiveRequest(h, client, msg)
+	}
+}
+
+func sendChallenge(h *Hub, client Client, msg Request) {
 	// Create challenge
 	challenge := authChallenge{
 		Challenge: h.randomBytes(),
@@ -369,6 +406,15 @@ func cmdAuthRequest(h *Hub, client Client, msg Request) {
 		base64.StdEncoding.EncodeToString(challenge.Challenge[:]),
 		base64.StdEncoding.EncodeToString(challenge.Salt[:]),
 	}})
+}
+
+func sendInteractiveRequest(h *Hub, client Client, msg Request) {
+	if h.interactiveFn(client, msg.Data) == false {
+		sendErr(client, ErrAuthFailed, "authentication failed", msg.RequestID)
+		return
+	}
+	_ = h.clients.SetAuthenticated(client.UID(), true)
+	client.SendJSON(Response{"response", true, msg.RequestID, nil})
 }
 
 func cmdAuthChallenge(h *Hub, client Client, msg Request) {
@@ -412,8 +458,8 @@ func cmdAuthChallenge(h *Hub, client Client, msg Request) {
 }
 
 func requireAuth(h *Hub, client Client, msg Request) bool {
-	// Exit early if we don't have a password (no auth required)
-	if h.options.Password == "" {
+	// Exit early if we don't have a password or interactive auth setup (no auth required)
+	if h.authRequired() == false {
 		return true
 	}
 
