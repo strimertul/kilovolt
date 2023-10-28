@@ -15,6 +15,9 @@ import (
 )
 
 const (
+	// Time allowed to write a message to the peer.
+	writeWait = 10 * time.Second
+
 	// Time allowed to read the next pong message from the peer.
 	pongWait = 60 * time.Second
 
@@ -41,8 +44,7 @@ type WebsocketClient struct {
 	addr string
 
 	// Context with timeouts
-	ctx    context.Context
-	cancel func()
+	ctx context.Context
 
 	// Buffered channel of outbound messages.
 	send chan []byte
@@ -55,23 +57,28 @@ type WebsocketClient struct {
 // The application runs readPump in a per-connection goroutine. The application
 // ensures that there is at most one reader on a connection by executing all
 // reads from this goroutine.
-func (c *WebsocketClient) readPump(hub *Hub) {
+func (c *WebsocketClient) readPump() {
 	defer func() {
 		c.hub.unregister <- c
 		c.conn.CloseNow()
-		c.cancel()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 
 	for {
-		_, message, err := c.conn.Read(c.ctx)
-		if err != nil {
-			hub.logger.Info("read error", zap.Error(err), zap.String("client", c.addr))
-			break
-		}
-		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
-		c.hub.incoming <- Message{c, message}
+		c.readNext()
 	}
+}
+
+func (c *WebsocketClient) readNext() {
+	ctx, cancel := context.WithTimeout(c.ctx, pongWait)
+	defer cancel()
+	_, message, err := c.conn.Read(ctx)
+	if err != nil {
+		c.hub.logger.Info("read error", zap.Error(err), zap.String("client", c.addr))
+		return
+	}
+	message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
+	c.hub.incoming <- Message{c, message}
 }
 
 // writePump pumps messages from the hub to the websocket connection.
@@ -94,27 +101,30 @@ func (c *WebsocketClient) writePump() {
 				return
 			}
 
-			w, err := c.conn.Writer(c.ctx, websocket.MessageText)
-			if err != nil {
-				return
-			}
-			w.Write(message)
-
-			// Add queued chat messages to the current websocket message.
-			n := len(c.send)
-			for i := 0; i < n; i++ {
-				w.Write(newline)
-				w.Write(<-c.send)
-			}
-
-			if err := w.Close(); err != nil {
-				return
-			}
+			c.write(message)
 		case <-ticker.C:
 			if err := c.conn.Ping(c.ctx); err != nil {
 				return
 			}
 		}
+	}
+}
+
+func (c *WebsocketClient) write(message []byte) {
+	ctx, cancel := context.WithTimeout(c.ctx, writeWait)
+	defer cancel()
+
+	w, err := c.conn.Writer(ctx, websocket.MessageText)
+	if err != nil {
+		return
+	}
+	w.Write(message)
+
+	// Read other queued messages
+	n := len(c.send)
+	for i := 0; i < n; i++ {
+		w.Write(newline)
+		w.Write(<-c.send)
 	}
 }
 
