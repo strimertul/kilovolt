@@ -7,6 +7,9 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"net/http"
+	"time"
+
+	"nhooyr.io/websocket"
 
 	"go.uber.org/zap"
 
@@ -174,15 +177,18 @@ func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 // CreateWebsocketClient upgrades a HTTP request to websocket and makes it a client for the hub
 func (hub *Hub) CreateWebsocketClient(w http.ResponseWriter, r *http.Request, options ClientOptions) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{InsecureSkipVerify: true})
 	if err != nil {
 		hub.logger.Error("error starting websocket session", zap.Error(err))
 		return
 	}
+
 	client := &WebsocketClient{
 		hub: hub, conn: conn,
 		send: make(chan []byte, 256), options: options,
+		addr: r.RemoteAddr,
 	}
+	client.ctx, client.cancel = context.WithTimeout(r.Context(), time.Second*10)
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in

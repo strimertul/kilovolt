@@ -1,11 +1,11 @@
-module github.com/strimertul/kilovolt/v10
+module github.com/strimertul/kilovolt/v11
 
 go 1.20
 
 require (
-	github.com/gorilla/websocket v1.5.0
 	github.com/json-iterator/go v1.1.12
 	go.uber.org/zap v1.26.0
+	nhooyr.io/websocket v1.8.10
 )
 
 require (
