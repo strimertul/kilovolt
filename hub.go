@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -185,8 +186,8 @@ func (hub *Hub) CreateWebsocketClient(w http.ResponseWriter, r *http.Request, op
 		hub: hub, conn: conn,
 		send: make(chan []byte, 256), options: options,
 		addr: r.RemoteAddr,
+		ctx:  context.Background(),
 	}
-	client.ctx = r.Context()
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in
