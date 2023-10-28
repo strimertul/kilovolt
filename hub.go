@@ -1,13 +1,11 @@
 package kv
 
 import (
-	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
 	mrand "math/rand"
 	"net/http"
-	"time"
 
 	"nhooyr.io/websocket"
 
@@ -174,13 +172,13 @@ func (hub *Hub) CreateWebsocketClient(w http.ResponseWriter, r *http.Request, op
 		send: make(chan []byte, 256), options: options,
 		addr: r.RemoteAddr,
 	}
-	client.ctx, client.cancel = context.WithTimeout(r.Context(), time.Second*10)
+	client.ctx = r.Context()
 	client.hub.register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
 	go client.writePump()
-	go client.readPump(hub)
+	go client.readPump()
 }
 
 func (hub *Hub) authRequired() bool {
