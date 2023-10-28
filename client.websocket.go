@@ -2,17 +2,14 @@ package kv
 
 import (
 	"bytes"
-	"net/http"
+	"context"
 	"time"
 
-	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
+	"nhooyr.io/websocket"
 )
 
 const (
-	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
-
 	// Time allowed to read the next pong message from the peer.
 	pongWait = 60 * time.Second
 
@@ -28,12 +25,6 @@ var (
 	space   = []byte{' '}
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
-}
-
 type WebsocketClient struct {
 	hub *Hub
 
@@ -42,6 +33,11 @@ type WebsocketClient struct {
 
 	// The websocket connection.
 	conn *websocket.Conn
+	addr string
+
+	// Context with timeouts
+	ctx    context.Context
+	cancel func()
 
 	// Buffered channel of outbound messages.
 	send chan []byte
@@ -57,17 +53,15 @@ type WebsocketClient struct {
 func (c *WebsocketClient) readPump(hub *Hub) {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		c.conn.CloseNow()
+		c.cancel()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+
 	for {
-		_, message, err := c.conn.ReadMessage()
+		_, message, err := c.conn.Read(c.ctx)
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				hub.logger.Info("abnormal close from client", zap.Error(err), zap.String("client", c.conn.RemoteAddr().String()))
-			}
+			hub.logger.Info("read error", zap.Error(err), zap.String("client", c.addr))
 			break
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
@@ -84,19 +78,18 @@ func (c *WebsocketClient) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		c.conn.CloseNow()
 	}()
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
 				// The hub closed the channel.
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				c.conn.Close(websocket.StatusNormalClosure, "bye")
 				return
 			}
 
-			w, err := c.conn.NextWriter(websocket.TextMessage)
+			w, err := c.conn.Writer(c.ctx, websocket.MessageText)
 			if err != nil {
 				return
 			}
@@ -113,8 +106,7 @@ func (c *WebsocketClient) writePump() {
 				return
 			}
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err := c.conn.Ping(c.ctx); err != nil {
 				return
 			}
 		}
