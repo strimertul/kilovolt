@@ -59,7 +59,7 @@ func (c *WebsocketClient) readPump() {
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 
-	for {
+	for c.ctx.Err() == nil {
 		c.readNext()
 	}
 }
@@ -87,7 +87,7 @@ func (c *WebsocketClient) writePump() {
 		ticker.Stop()
 		c.conn.CloseNow()
 	}()
-	for {
+	for c.ctx.Err() == nil {
 		select {
 		case message, ok := <-c.send:
 			if !ok {
