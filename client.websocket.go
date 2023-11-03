@@ -14,10 +14,10 @@ const (
 	writeWait = 10 * time.Second
 
 	// Time allowed to read the next pong message from the peer.
-	pongWait = 60 * time.Second
+	pongWait = time.Minute
 
 	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
+	pingPeriod = pongWait / 2
 
 	// Maximum message size allowed from peer.
 	maxMessageSize = 512000
@@ -67,9 +67,7 @@ func (c *WebsocketClient) readPump() {
 }
 
 func (c *WebsocketClient) readNext() error {
-	ctx, cancel := context.WithTimeout(c.ctx, pongWait)
-	defer cancel()
-	_, message, err := c.conn.Read(ctx)
+	_, message, err := c.conn.Read(c.ctx)
 	if err != nil {
 		c.hub.logger.Debug("read error", zap.Error(err), zap.String("client", c.addr))
 		return err

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [11.0.1] - 2023-11-03
+
+### Fixed
+
+- Ping deadlines are not coded right and dropped all connections after a minute, this has been temporarily turned off
+
 ## [11.0.0] - 2023-11-03
 
 ### Changed
@@ -75,7 +81,8 @@ New protocol version (`v8`)
 
 - Added `kdel` to delete keys
 
-[current]: https://github.com/strimertul/kilovolt/compare/v11.0.0...HEAD
+[current]: https://github.com/strimertul/kilovolt/compare/v11.0.1...HEAD
+[11.0.1]: https://github.com/strimertul/kilovolt/compare/v11.0.0...v11.0.1
 [11.0.0]: https://github.com/strimertul/kilovolt/compare/v10.0.0...v11.0.0
 [10.0.0]: https://github.com/strimertul/kilovolt/compare/v9.1.0...v10.0.0
 [9.1.0]: https://github.com/strimertul/kilovolt/compare/v9.0.1...v9.1.0
