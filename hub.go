@@ -122,7 +122,7 @@ func sendErr(client Client, err ErrCode, details string, requestID string) {
 }
 
 func (hub *Hub) Run() {
-	hub.logger.Info("running")
+	hub.logger.Debug("Hub is running")
 	for {
 		select {
 		case client := <-hub.register:

@@ -5,11 +5,6 @@ import (
 	"context"
 	"time"
 
-<<<<<<< HEAD
-	"github.com/gorilla/websocket"
-
-=======
->>>>>>> 894b027 (feat: switch to nhooyr websocket)
 	"go.uber.org/zap"
 	"nhooyr.io/websocket"
 )
@@ -65,20 +60,23 @@ func (c *WebsocketClient) readPump() {
 	c.conn.SetReadLimit(maxMessageSize)
 
 	for c.ctx.Err() == nil {
-		c.readNext()
+		if err := c.readNext(); err != nil {
+			return
+		}
 	}
 }
 
-func (c *WebsocketClient) readNext() {
+func (c *WebsocketClient) readNext() error {
 	ctx, cancel := context.WithTimeout(c.ctx, pongWait)
 	defer cancel()
 	_, message, err := c.conn.Read(ctx)
 	if err != nil {
-		c.hub.logger.Info("read error", zap.Error(err), zap.String("client", c.addr))
-		return
+		c.hub.logger.Debug("read error", zap.Error(err), zap.String("client", c.addr))
+		return err
 	}
 	message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 	c.hub.incoming <- Message{c, message}
+	return nil
 }
 
 // writePump pumps messages from the hub to the websocket connection.
@@ -126,6 +124,7 @@ func (c *WebsocketClient) write(message []byte) {
 		w.Write(newline)
 		w.Write(<-c.send)
 	}
+	w.Close()
 }
 
 func (c *WebsocketClient) SetUID(uid int64) {
