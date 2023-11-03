@@ -17,6 +17,7 @@ func TestHub(t *testing.T) {
 
 	// Run hub routines on a separate goroutine
 	go hub.Run()
+	defer hub.Close()
 
 	client := NewLocalClient(ClientOptions{test_namespace}, log)
 	t.Run("register client", func(t *testing.T) {

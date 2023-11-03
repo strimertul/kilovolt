@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"context"
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -19,6 +20,7 @@ type Message struct {
 
 type HubOptions struct {
 	Password string
+	Context  context.Context
 }
 
 type InteractiveFn func(client Client, message map[string]interface{}) bool
@@ -31,6 +33,8 @@ type Hub struct {
 	unregister    chan Client
 	subscriptions *subscriptionManager
 	interactiveFn InteractiveFn
+	context       context.Context
+	cancel        context.CancelFunc
 
 	db Driver
 
@@ -43,6 +47,11 @@ func NewHub(db Driver, options HubOptions, logger *zap.Logger) (*Hub, error) {
 	if logger == nil {
 		logger, _ = zap.NewProduction()
 	}
+	ctx := options.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	hubContext, cancel := context.WithCancel(ctx)
 
 	clients := newClientList()
 	subscriptions := makeSubscriptionManager()
@@ -56,6 +65,8 @@ func NewHub(db Driver, options HubOptions, logger *zap.Logger) (*Hub, error) {
 		logger:        logger,
 		options:       options,
 		subscriptions: subscriptions,
+		context:       hubContext,
+		cancel:        cancel,
 	}
 
 	subscriptions.hub = hub
@@ -64,6 +75,7 @@ func NewHub(db Driver, options HubOptions, logger *zap.Logger) (*Hub, error) {
 }
 
 func (hub *Hub) Close() {
+	hub.cancel()
 }
 
 func (hub *Hub) SetOptions(options HubOptions) {
@@ -128,6 +140,9 @@ func (hub *Hub) Run() {
 
 		case message := <-hub.incoming:
 			hub.handleCmd(message.Client, message)
+
+		case <-hub.context.Done():
+			return
 		}
 	}
 }
