@@ -1,4 +1,4 @@
-module github.com/strimertul/kilovolt/v11
+module git.sr.ht/~ashkeel/kilovolt/v11
 
 go 1.20
 

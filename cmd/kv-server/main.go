@@ -4,7 +4,7 @@ import (
 	"flag"
 	"net/http"
 
-	kv "github.com/strimertul/kilovolt/v11"
+	kv "git.sr.ht/~ashkeel/kilovolt/v11"
 	"go.uber.org/zap"
 )
 
