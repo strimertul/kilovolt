@@ -1,3 +1,5 @@
+# MOVED TO <https://git.sr.ht/~ashkeel/kilovolt>
+
 # Kilovolt
 
 Websocket-based Key-value store, can use many databases on the backend. Has a slim set of features (get/set/pub/sub), mostly what's needed for [strimertul](https://git.sr.ht/~ashkeel/strimertul).
